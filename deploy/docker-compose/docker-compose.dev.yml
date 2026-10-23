@@ -1,0 +1,57 @@
+services:
+  postgres:
+    build:
+      context: .
+      dockerfile: Containerfile.postgres
+    image: forgeops/postgres-age-vector:16
+    container_name: forgeops-postgres
+    environment:
+      POSTGRES_USER: forgeops
+      POSTGRES_PASSWORD: forgeops
+      POSTGRES_DB: forgeops
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ../../migrations/001_initial_schema.sql:/docker-entrypoint-initdb.d/001_initial_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U forgeops -d forgeops"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:v1.104.0
+    container_name: forgeops-victoriametrics
+    ports:
+      - "8428:8428"
+    volumes:
+      - vmdata:/victoria-metrics-data
+    command:
+      - "-storageDataPath=/victoria-metrics-data"
+      - "-retentionPeriod=14d"
+      - "-httpListenAddr=:8428"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8428/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  loki:
+    image: grafana/loki:3.2.0
+    container_name: forgeops-loki
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - lokidata:/loki
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3100/ready || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+volumes:
+  pgdata:
+  vmdata:
+  lokidata:

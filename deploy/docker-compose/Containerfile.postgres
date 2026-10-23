@@ -1,0 +1,22 @@
+FROM pgvector/pgvector:pg16
+
+USER root
+
+# Install build dependencies for Apache AGE
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    git \
+    postgresql-server-dev-16 \
+    bison \
+    flex \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Clone, compile, and install Apache AGE for PostgreSQL 16
+WORKDIR /tmp
+RUN git clone --depth 1 --branch PG16/v1.5.0-rc0 https://github.com/apache/age.git || \
+    git clone --depth 1 https://github.com/apache/age.git
+WORKDIR /tmp/age
+RUN make install && rm -rf /tmp/age
+
+USER postgres

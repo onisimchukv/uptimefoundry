@@ -1,0 +1,96 @@
+# ForgeOps v1.2 Configuration Example
+
+server:
+  listen_address: "0.0.0.0:8080"
+  tls:
+    enabled: false
+    # cert_file: "/etc/forgeops/pki/server.crt"
+    # key_file: "/etc/forgeops/pki/server.key"
+
+database:
+  dsn: "postgres://forgeops:forgeops@localhost:5432/forgeops?sslmode=disable"
+  max_open_connections: 25
+  max_idle_connections: 5
+  conn_max_lifetime: 15m
+  extensions:
+    age:
+      enabled: true
+      graph_name: "forgeops_graph"
+    vector:
+      enabled: true
+      embedding_dimension: 768
+
+discovery:
+  interval: 5m
+  adapters:
+    host:
+      enabled: true
+    kubernetes:
+      enabled: true
+      in_cluster: false
+    docker_swarm:
+      enabled: false
+
+ebpf:
+  enabled: true
+  export_metrics: true
+  otlp_metrics_endpoint: "http://127.0.0.1:8428/opentelemetry/v1/metrics"
+  monitor_tls: true
+  capture_sql: true
+  ring_buffer_pages: 64
+
+telemetry:
+  metrics:
+    provider: victoriametrics
+    victoriametrics:
+      query_endpoint: "http://localhost:8428"
+      query_timeout: 15s
+      max_series: 2000
+    prometheus:
+      query_endpoint: "http://localhost:9090"
+      query_timeout: 15s
+  logs:
+    provider: loki
+    loki:
+      query_endpoint: "http://localhost:3100"
+      query_timeout: 15s
+  traces:
+    provider: otel
+    otel:
+      endpoint: "http://localhost:4317"
+
+rag:
+  enabled: true
+  embedding_provider: local_tei
+  embedding_endpoint: "http://127.0.0.1:8081/embed"
+  top_k: 4
+  similarity_threshold: 0.72
+  sources:
+    - path: "./runbooks"
+      type: "runbook"
+    - path: "./postmortems"
+      type: "postmortem"
+
+mcp:
+  server:
+    enabled: true
+    transports:
+      stdio: false
+      sse:
+        enabled: true
+        port: 8081
+  client:
+    enabled: false
+
+ai:
+  enabled: false
+  provider: local_openai_compatible
+  endpoint: "http://127.0.0.1:11434/v1"
+  model: "qwen2.5-coder:14b"
+  request_timeout: 60s
+  max_context_tokens: 16384
+
+security:
+  remediation:
+    enabled: false
+    require_two_person_approval: true

@@ -1,0 +1,31 @@
+# Binaries and build artifacts
+bin/
+dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test artifacts and coverage
+*.out
+coverage.html
+profile.pprof
+
+# eBPF compiled objects
+*.bpf.o
+internal/ebpf/bpf/*.o
+
+# Environment and secrets
+.env
+*.local.yaml
+*.secret.yaml
+
+# IDE and editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
