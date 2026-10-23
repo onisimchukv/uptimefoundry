@@ -13,6 +13,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/forgeops/forgeops/internal/adapters"
+	"github.com/forgeops/forgeops/internal/adapters/host"
 	"github.com/forgeops/forgeops/internal/config"
 	"github.com/forgeops/forgeops/internal/core/models"
 	"github.com/forgeops/forgeops/internal/graph"
@@ -53,10 +55,12 @@ func main() {
 
 	// Initialize Storage and Graph Engine
 	var (
-		db           *postgres.DB
-		resourceRepo *postgres.ResourceRepository
-		graphEngine  graph.GraphEngine
-		topTraverser *traverser.TopologyTraverser
+		db              *postgres.DB
+		resourceRepo    *postgres.ResourceRepository
+		discoveryRepo   *postgres.DiscoveryRepository
+		graphEngine     graph.GraphEngine
+		topTraverser    *traverser.TopologyTraverser
+		discoveryRunner *adapters.Runner
 	)
 
 	if cfg.Database.DSN != "" {
@@ -87,7 +91,34 @@ func main() {
 			}
 
 			resourceRepo = postgres.NewResourceRepository(db, graphEngine, logger)
+			discoveryRepo = postgres.NewDiscoveryRepository(db)
 			topTraverser = traverser.New(graphEngine, logger)
+
+			// Setup Discovery Adapters
+			var activeAdapters []adapters.DiscoveryAdapter
+			if cfg.Discovery.Adapters.Host.Enabled {
+				activeAdapters = append(activeAdapters, host.New(logger))
+				logger.Info("registered discovery adapter", slog.String("adapter", "host"))
+			}
+
+			discoveryRunner = adapters.NewRunner(activeAdapters, resourceRepo, discoveryRepo, logger)
+
+			// Background Discovery Scheduler
+			if cfg.Discovery.Interval > 0 && len(activeAdapters) > 0 {
+				go func() {
+					ticker := time.NewTicker(cfg.Discovery.Interval)
+					defer ticker.Stop()
+					logger.Info("starting discovery scheduler", slog.Duration("interval", cfg.Discovery.Interval))
+					for {
+						select {
+						case <-ctx.Done():
+							return
+						case <-ticker.C:
+							_, _ = discoveryRunner.RunAll(ctx, "")
+						}
+					}
+				}()
+			}
 		}
 	}
 
@@ -154,6 +185,46 @@ func main() {
 			status["graph_engine"] = graphEngine.Name()
 		}
 		_ = json.NewEncoder(w).Encode(status)
+	})
+
+	// Discovery Endpoints
+	mux.HandleFunc("/api/v1/discovery/runs", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		if r.Method == http.MethodPost {
+			if discoveryRunner == nil {
+				http.Error(w, `{"error":"discovery runner unavailable"}`, http.StatusServiceUnavailable)
+				return
+			}
+			envID := r.URL.Query().Get("environment_id")
+			run, err := discoveryRunner.RunAll(r.Context(), envID)
+			if err != nil {
+				http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusInternalServerError)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(run)
+			return
+		}
+
+		if r.Method == http.MethodGet {
+			if discoveryRepo == nil {
+				http.Error(w, `{"error":"database unavailable"}`, http.StatusServiceUnavailable)
+				return
+			}
+			envID := r.URL.Query().Get("environment_id")
+			limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+			offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+
+			runs, err := discoveryRepo.ListRuns(r.Context(), envID, limit, offset)
+			if err != nil {
+				http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusInternalServerError)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(runs)
+			return
+		}
+
+		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
 	})
 
 	// Resource API Endpoints

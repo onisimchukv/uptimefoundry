@@ -53,3 +53,12 @@ type RemediationRepository interface {
 type AuditRepository interface {
 	RecordEvent(ctx context.Context, event *models.AuditEvent) error
 }
+
+// DiscoveryRepository manages historical discovery execution runs.
+type DiscoveryRepository interface {
+	CreateRun(ctx context.Context, run *models.DiscoveryRun) error
+	UpdateRun(ctx context.Context, run *models.DiscoveryRun) error
+	GetRunByID(ctx context.Context, id string) (*models.DiscoveryRun, error)
+	ListRuns(ctx context.Context, envID string, limit, offset int) ([]*models.DiscoveryRun, error)
+}
+

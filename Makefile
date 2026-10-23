@@ -7,6 +7,7 @@ AGENT_NAME=bin/forgeops-agent
 build:
 	@mkdir -p bin
 	go build -o $(BINARY_NAME) ./cmd/forgeops
+	go build -o $(CLI_NAME) ./cmd/forgeops-cli
 
 test:
 	go test -v -race ./...
