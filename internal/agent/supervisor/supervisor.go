@@ -15,6 +15,7 @@ import (
 	"github.com/forgeops/forgeops/internal/adapters"
 	"github.com/forgeops/forgeops/internal/adapters/host"
 	"github.com/forgeops/forgeops/internal/agent/capability"
+	"github.com/forgeops/forgeops/internal/agent/flows"
 	"github.com/forgeops/forgeops/internal/agent/identity"
 	"github.com/forgeops/forgeops/internal/agent/obi"
 	"github.com/forgeops/forgeops/internal/agent/policy"
@@ -44,6 +45,8 @@ type Supervisor struct {
 	wal            *wal.WAL
 	hostAdapter    adapters.DiscoveryAdapter
 	obiWrapper     *obi.Wrapper
+	flowTable      *flows.Table
+	dnsTracker     *flows.DNSTracker
 	ipcListener    net.Listener
 	logger         *slog.Logger
 	connected      bool
@@ -80,6 +83,8 @@ func New(cfg Config, logger *slog.Logger) (*Supervisor, error) {
 	hostAdapter := host.New(logger)
 	effPolicy := locPol.Intersect(nil)
 	obiWrapper := obi.NewWrapper(effPolicy, logger)
+	flowTable := flows.NewTable(nil, nil, logger)
+	dnsTracker := flows.NewDNSTracker(effPolicy.DNS.FullNames)
 
 	return &Supervisor{
 		cfg:         cfg,
@@ -89,6 +94,8 @@ func New(cfg Config, logger *slog.Logger) (*Supervisor, error) {
 		wal:         w,
 		hostAdapter: hostAdapter,
 		obiWrapper:  obiWrapper,
+		flowTable:   flowTable,
+		dnsTracker:  dnsTracker,
 		logger:      logger,
 	}, nil
 }
@@ -149,6 +156,9 @@ func (s *Supervisor) Start(ctx context.Context) error {
 
 	// 6. Start Heartbeat Loop
 	go s.runHeartbeatLoop(ctx)
+
+	// 7. Start Flow Delta Flush Loop (Section 7.3)
+	go s.runFlowFlushLoop(ctx)
 
 	return nil
 }
@@ -284,6 +294,46 @@ func (s *Supervisor) sendHeartbeat() {
 	}
 
 	_ = s.wal.Push(msg)
+}
+
+func (s *Supervisor) runFlowFlushLoop(ctx context.Context) {
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			s.flushFlowDelta()
+		}
+	}
+}
+
+func (s *Supervisor) flushFlowDelta() {
+	s.mu.RLock()
+	allowed := s.effective.Modules["flows"].Allowed
+	agentID := s.id.AgentID
+	s.mu.RUnlock()
+
+	if !allowed || s.flowTable == nil {
+		return
+	}
+
+	delta := s.flowTable.FlushDelta(15)
+	if len(delta.Edges) == 0 {
+		return
+	}
+
+	msg := &protocol.AgentMessage{
+		AgentID: agentID,
+		Class:   protocol.ClassFlow,
+		Flow:    &delta,
+	}
+
+	if err := s.wal.Push(msg); err != nil {
+		s.logger.Warn("failed to push flow delta to wal", slog.Any("error", err))
+	}
 }
 
 // Status returns a snapshot of agent state for forgeops-agentctl.
