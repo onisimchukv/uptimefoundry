@@ -14,6 +14,7 @@ import (
 
 	"github.com/forgeops/forgeops/internal/core/models"
 	"github.com/forgeops/forgeops/internal/graph/traverser"
+	"github.com/forgeops/forgeops/internal/telemetry"
 )
 
 var (
@@ -90,6 +91,20 @@ func main() {
 			fmt.Printf("unknown topology action: %s\n", action)
 		}
 
+	case "metrics":
+		if len(args) < 3 || args[1] != "query" {
+			fmt.Println("Usage: forgeops-cli metrics query <promql_expression>")
+			os.Exit(1)
+		}
+		handleMetricsQuery(*serverURL, args[2])
+
+	case "logs":
+		if len(args) < 3 || args[1] != "query" {
+			fmt.Println("Usage: forgeops-cli logs query <logql_expression>")
+			os.Exit(1)
+		}
+		handleLogsQuery(*serverURL, args[2])
+
 	default:
 		fmt.Printf("unknown command: %s\n", command)
 		printUsage()
@@ -114,6 +129,8 @@ Commands:
   resources list [kind]                  List discovered assets (optional kind filter)
   topology get <resource_id> [hops]      Display neighborhood topology subgraph
   topology blast-radius <resource_id>    Compute blast-radius severity report for an asset
+  metrics query <promql>                 Query VictoriaMetrics / Prometheus instant metrics
+  logs query <logql>                     Query Grafana Loki operational logs
 `)
 }
 
@@ -263,4 +280,73 @@ func handleBlastRadius(serverURL, resourceID, hops string) {
 		fmt.Printf(" Impacted Workloads:     %s\n", strings.Join(report.ImpactedWorkloads, ", "))
 	}
 	fmt.Println("=======================================================")
+}
+
+func handleMetricsQuery(serverURL, promql string) {
+	payload, _ := json.Marshal(map[string]any{
+		"query": promql,
+		"time":  time.Now().UTC(),
+	})
+
+	resp, err := client.Post(serverURL+"/api/v1/telemetry/metrics/query", "application/json", bytes.NewBuffer(payload))
+	if err != nil {
+		fmt.Printf("Error: metric query failed: %v\n", err)
+		os.Exit(1)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		fmt.Printf("Error (%d): %s\n", resp.StatusCode, string(body))
+		os.Exit(1)
+	}
+
+	var result telemetry.MetricResult
+	_ = json.NewDecoder(resp.Body).Decode(&result)
+
+	fmt.Printf("\nMetrics Result (Query Time: %v, Series: %d):\n", result.QueryTime, len(result.Series))
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+	fmt.Fprintln(w, "SERIES LABELS\tVALUE\tTIMESTAMP")
+	for _, s := range result.Series {
+		val := "N/A"
+		ts := "N/A"
+		if len(s.Points) > 0 {
+			val = fmt.Sprintf("%.4f", s.Points[0].Value)
+			ts = s.Points[0].Timestamp.Format("15:04:05")
+		}
+		var labelPairs []string
+		for k, v := range s.Metric {
+			labelPairs = append(labelPairs, fmt.Sprintf("%s=%q", k, v))
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\n", strings.Join(labelPairs, ","), val, ts)
+	}
+	w.Flush()
+}
+
+func handleLogsQuery(serverURL, logql string) {
+	payload, _ := json.Marshal(telemetry.LogQuery{
+		Query: logql,
+		Limit: 50,
+	})
+
+	resp, err := client.Post(serverURL+"/api/v1/telemetry/logs/query", "application/json", bytes.NewBuffer(payload))
+	if err != nil {
+		fmt.Printf("Error: log query failed: %v\n", err)
+		os.Exit(1)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		fmt.Printf("Error (%d): %s\n", resp.StatusCode, string(body))
+		os.Exit(1)
+	}
+
+	var result telemetry.LogResult
+	_ = json.NewDecoder(resp.Body).Decode(&result)
+
+	fmt.Printf("\nLogs Result (Query Time: %v, Entries: %d):\n", result.QueryTime, result.Total)
+	for _, entry := range result.Entries {
+		fmt.Printf("[%s] %s\n", entry.Timestamp.Format("2006-01-02 15:04:05"), entry.Line)
+	}
 }

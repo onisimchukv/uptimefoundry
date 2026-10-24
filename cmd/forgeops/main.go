@@ -15,13 +15,18 @@ import (
 
 	"github.com/forgeops/forgeops/internal/adapters"
 	"github.com/forgeops/forgeops/internal/adapters/host"
+	"github.com/forgeops/forgeops/internal/agent/protocol"
 	"github.com/forgeops/forgeops/internal/config"
+	cpagent "github.com/forgeops/forgeops/internal/controlplane/agent"
 	"github.com/forgeops/forgeops/internal/core/models"
 	"github.com/forgeops/forgeops/internal/graph"
 	"github.com/forgeops/forgeops/internal/graph/age"
 	"github.com/forgeops/forgeops/internal/graph/fallback"
 	"github.com/forgeops/forgeops/internal/graph/traverser"
 	"github.com/forgeops/forgeops/internal/storage/postgres"
+	"github.com/forgeops/forgeops/internal/telemetry"
+	"github.com/forgeops/forgeops/internal/telemetry/providers/loki"
+	"github.com/forgeops/forgeops/internal/telemetry/providers/victoriametrics"
 )
 
 var (
@@ -74,14 +79,12 @@ func main() {
 			defer db.Close()
 			logger.Info("connected to postgresql metadata engine")
 
-			// Run embedded migrations
 			if err := db.Migrate(ctx); err != nil {
 				logger.Error("failed to run database migrations", slog.Any("error", err))
 			} else {
 				logger.Info("database migrations verified")
 			}
 
-			// Select Graph Engine: Apache AGE if available, else recursive CTE fallback
 			if db.HasAGE && cfg.Database.Extensions.AGE.Enabled {
 				graphEngine = age.New(db.Pool, cfg.Database.Extensions.AGE.GraphName, logger)
 				logger.Info("selected primary graph engine", slog.String("engine", graphEngine.Name()))
@@ -108,7 +111,6 @@ func main() {
 				go func() {
 					ticker := time.NewTicker(cfg.Discovery.Interval)
 					defer ticker.Stop()
-					logger.Info("starting discovery scheduler", slog.Duration("interval", cfg.Discovery.Interval))
 					for {
 						select {
 						case <-ctx.Done():
@@ -120,6 +122,43 @@ func main() {
 				}()
 			}
 		}
+	}
+
+	// Initialize Agent CA & Ingestion Service (v1.3 Security Boundary)
+	agentCA, err := cpagent.NewCA()
+	if err != nil {
+		logger.Error("failed to initialize agent ca", slog.Any("error", err))
+		os.Exit(1)
+	}
+	agentIngestion := cpagent.NewIngestionService(agentCA, resourceRepo, logger)
+
+	// Initialize Telemetry Providers
+	var (
+		metricsProvider telemetry.MetricsProvider
+		logsProvider    telemetry.LogsProvider
+	)
+
+	if cfg.Telemetry.Metrics.Provider == "victoriametrics" {
+		metricsProvider = victoriametrics.New(
+			cfg.Telemetry.Metrics.VictoriaMetrics.QueryEndpoint,
+			cfg.Telemetry.Metrics.VictoriaMetrics.QueryTimeout,
+			cfg.Telemetry.Metrics.VictoriaMetrics.MaxSeries,
+			logger,
+		)
+		logger.Info("initialized victoriametrics provider",
+			slog.String("endpoint", cfg.Telemetry.Metrics.VictoriaMetrics.QueryEndpoint),
+		)
+	}
+
+	if cfg.Telemetry.Logs.Provider == "loki" {
+		logsProvider = loki.New(
+			cfg.Telemetry.Logs.Loki.QueryEndpoint,
+			cfg.Telemetry.Logs.Loki.QueryTimeout,
+			logger,
+		)
+		logger.Info("initialized loki provider",
+			slog.String("endpoint", cfg.Telemetry.Logs.Loki.QueryEndpoint),
+		)
 	}
 
 	mux := http.NewServeMux()
@@ -305,6 +344,141 @@ func main() {
 
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(report)
+	})
+
+	// Telemetry Endpoints
+	mux.HandleFunc("/api/v1/telemetry/metrics/query", func(w http.ResponseWriter, r *http.Request) {
+		if metricsProvider == nil {
+			http.Error(w, `{"error":"metrics provider unavailable"}`, http.StatusServiceUnavailable)
+			return
+		}
+
+		var req struct {
+			Query string    `json:"query"`
+			Time  time.Time `json:"time"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, `{"error":"invalid request json"}`, http.StatusBadRequest)
+			return
+		}
+
+		result, err := metricsProvider.QueryInstant(r.Context(), req.Query, req.Time)
+		if err != nil {
+			http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(result)
+	})
+
+	mux.HandleFunc("/api/v1/telemetry/logs/query", func(w http.ResponseWriter, r *http.Request) {
+		if logsProvider == nil {
+			http.Error(w, `{"error":"logs provider unavailable"}`, http.StatusServiceUnavailable)
+			return
+		}
+
+		var req telemetry.LogQuery
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, `{"error":"invalid request json"}`, http.StatusBadRequest)
+			return
+		}
+
+		result, err := logsProvider.QueryLogs(r.Context(), req)
+		if err != nil {
+			http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(result)
+	})
+
+	// Agent Control Plane Endpoints (v1.3)
+	mux.HandleFunc("/api/v1/agent/enroll", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPost {
+			http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+			return
+		}
+
+		var req struct {
+			Token           string `json:"token"`
+			HostFingerprint string `json:"host_fingerprint"`
+			CSRPEM          string `json:"csr_pem"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, `{"error":"invalid request json"}`, http.StatusBadRequest)
+			return
+		}
+
+		agentID, certPEM, expiresAt, err := agentCA.Enroll(req.Token, req.HostFingerprint, []byte(req.CSRPEM))
+		if err != nil {
+			http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusUnauthorized)
+			return
+		}
+
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"agent_id":        agentID,
+			"certificate_pem": string(certPEM),
+			"ca_cert_pem":     string(agentCA.CACertificatePEM()),
+			"expires_at":      expiresAt,
+		})
+	})
+
+	mux.HandleFunc("/api/v1/agent/message", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPost {
+			http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+			return
+		}
+
+		var msg protocol.AgentMessage
+		if err := json.NewDecoder(r.Body).Decode(&msg); err != nil {
+			http.Error(w, `{"error":"invalid message json"}`, http.StatusBadRequest)
+			return
+		}
+
+		resp, err := agentIngestion.HandleMessage(r.Context(), &msg)
+		if err != nil {
+			http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusInternalServerError)
+			return
+		}
+
+		_ = json.NewEncoder(w).Encode(resp)
+	})
+
+	mux.HandleFunc("/api/v1/agents", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(agentIngestion.ActiveAgents())
+	})
+
+	mux.HandleFunc("/api/v1/agents/tokens", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPost {
+			http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+			return
+		}
+
+		var req struct {
+			EnvironmentID string `json:"environment_id"`
+			MaxUses       int    `json:"max_uses"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		if req.EnvironmentID == "" {
+			req.EnvironmentID = "00000000-0000-0000-0000-000000000001"
+		}
+		if req.MaxUses <= 0 {
+			req.MaxUses = 1
+		}
+
+		tok := agentCA.CreateBootstrapToken(req.EnvironmentID, req.MaxUses, 24*time.Hour)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"token":          tok,
+			"environment_id": req.EnvironmentID,
+			"max_uses":       req.MaxUses,
+			"expires_in":     "24h",
+		})
 	})
 
 	server := &http.Server{
