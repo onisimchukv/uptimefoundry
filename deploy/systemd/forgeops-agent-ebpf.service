@@ -1,0 +1,45 @@
+[Unit]
+Description=ForgeOps Host Agent eBPF Worker
+Documentation=https://github.com/forgeops/forgeops
+BindsTo=forgeops-agent.service
+After=forgeops-agent.service
+
+[Service]
+Type=simple
+User=forgeops-agent-ebpf
+Group=forgeops-agent
+ExecStart=/usr/libexec/forgeops-agent/forgeops-agent-ebpf
+Restart=on-failure
+RestartSec=5s
+
+# Security Hardening (Specification v1.3 Section 13.2)
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=read-only
+RestrictRealtime=yes
+
+# Narrow Capabilities required for eBPF attachment and memory tracing
+CapabilityBoundingSet=CAP_BPF CAP_PERFMON CAP_NET_ADMIN CAP_SYS_PTRACE
+AmbientCapabilities=CAP_BPF CAP_PERFMON CAP_NET_ADMIN CAP_SYS_PTRACE
+
+# Strict Network Isolation: eBPF worker has NO network sockets; AF_UNIX for IPC to supervisor, AF_NETLINK for socket tracking
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
+
+# System Call Architectures
+SystemCallArchitectures=native
+
+# Filesystem Access
+ReadWritePaths=/run/forgeops-agent
+ReadOnlyPaths=/proc /sys /etc/forgeops-agent
+
+# Resource Budgets (Section 11.1)
+CPUQuota=10%
+MemoryHigh=300M
+MemoryMax=384M
+
+[Install]
+WantedBy=forgeops-agent.service

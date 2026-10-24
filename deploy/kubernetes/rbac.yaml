@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: forgeops-agent
+  namespace: forgeops-system
+  labels:
+    app.kubernetes.io/name: forgeops-agent
+    app.kubernetes.io/part-of: forgeops
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: forgeops-agent-reader
+  labels:
+    app.kubernetes.io/name: forgeops-agent
+rules:
+  # Section 12.2: RBAC is strictly read-only: get, list, watch on pods, nodes, namespaces, services, and endpoints.
+  # Explicitly NO access to Secrets or ConfigMap contents.
+  - apiGroups: [""]
+    resources:
+      - pods
+      - nodes
+      - namespaces
+      - services
+      - endpoints
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["discovery.k8s.io"]
+    resources:
+      - endpointslices
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources:
+      - daemonsets
+      - deployments
+      - statefulsets
+      - replicasets
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: forgeops-agent-reader-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: forgeops-agent-reader
+subjects:
+  - kind: ServiceAccount
+    name: forgeops-agent
+    namespace: forgeops-system

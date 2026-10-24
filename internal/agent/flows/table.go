@@ -3,6 +3,7 @@ package flows
 import (
 	"log/slog"
 	"math"
+	"sort"
 	"sync"
 	"time"
 
@@ -162,4 +163,45 @@ func (t *Table) ActiveFlowCount() int {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	return len(t.flows)
+}
+
+// SetMaxEdges configures the maximum capacity of the flow table.
+func (t *Table) SetMaxEdges(limit int) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.maxEdges = limit
+}
+
+// PruneToTopN retains only the top N flows sorted by total bytes transferred (Shedding Step 4).
+func (t *Table) PruneToTopN(n int) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if len(t.flows) <= n {
+		return
+	}
+
+	type flowItem struct {
+		key        FlowKey
+		totalBytes uint64
+	}
+
+	items := make([]flowItem, 0, len(t.flows))
+	for k, accum := range t.flows {
+		items = append(items, flowItem{
+			key:        k,
+			totalBytes: accum.BytesSent + accum.BytesRecv,
+		})
+	}
+
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].totalBytes > items[j].totalBytes
+	})
+
+	// Keep first n items, delete the rest
+	pruned := make(map[FlowKey]*FlowAccumulator, n)
+	for i := 0; i < n && i < len(items); i++ {
+		pruned[items[i].key] = t.flows[items[i].key]
+	}
+	t.flows = pruned
 }

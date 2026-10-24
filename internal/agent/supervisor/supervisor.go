@@ -47,6 +47,7 @@ type Supervisor struct {
 	obiWrapper     *obi.Wrapper
 	flowTable      *flows.Table
 	dnsTracker     *flows.DNSTracker
+	watchdog       *Watchdog
 	ipcListener    net.Listener
 	logger         *slog.Logger
 	connected      bool
@@ -86,7 +87,7 @@ func New(cfg Config, logger *slog.Logger) (*Supervisor, error) {
 	flowTable := flows.NewTable(nil, nil, logger)
 	dnsTracker := flows.NewDNSTracker(effPolicy.DNS.FullNames)
 
-	return &Supervisor{
+	s := &Supervisor{
 		cfg:         cfg,
 		localPolicy: locPol,
 		effective:   effPolicy,
@@ -97,7 +98,13 @@ func New(cfg Config, logger *slog.Logger) (*Supervisor, error) {
 		flowTable:   flowTable,
 		dnsTracker:  dnsTracker,
 		logger:      logger,
-	}, nil
+	}
+
+	wcfg := DefaultWatchdogConfig()
+	wcfg.OnShedChange = s.handleShedChange
+	s.watchdog = NewWatchdog(wcfg, nil, logger)
+
+	return s, nil
 }
 
 // Start launches the supervisor, initiates capability probing, identity enrollment, and IPC listeners.
@@ -160,11 +167,17 @@ func (s *Supervisor) Start(ctx context.Context) error {
 	// 7. Start Flow Delta Flush Loop (Section 7.3)
 	go s.runFlowFlushLoop(ctx)
 
+	// 8. Start Watchdog Resource Monitor & Shedding Engine (Section 11.2)
+	s.watchdog.Start(ctx)
+
 	return nil
 }
 
 // Stop cleanly terminates supervisor workers and deletes the local IPC socket.
 func (s *Supervisor) Stop() {
+	if s.watchdog != nil {
+		s.watchdog.Stop()
+	}
 	if s.cancel != nil {
 		s.cancel()
 		s.cancel = nil
@@ -261,7 +274,8 @@ func (s *Supervisor) sendHeartbeat() {
 	conflicts := len(s.effective.Conflicts)
 	s.mu.RUnlock()
 
-	walBytes, unacked, drops, shed := s.wal.Stats()
+	walBytes, unacked, drops, _ := s.wal.Stats()
+	shed := int(s.watchdog.CurrentLevel())
 
 	probeStates := make(map[string]string)
 	for k, v := range s.capability.ProbeStates {
@@ -341,7 +355,8 @@ func (s *Supervisor) Status() map[string]any {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	walBytes, unacked, drops, shed := s.wal.Stats()
+	walBytes, unacked, drops, _ := s.wal.Stats()
+	shed := int(s.watchdog.CurrentLevel())
 
 	status := map[string]any{
 		"agent_id":          s.id.AgentID,
@@ -353,6 +368,7 @@ func (s *Supervisor) Status() map[string]any {
 		"wal_bytes":         walBytes,
 		"unacked_messages":  unacked,
 		"shed_level":        shed,
+		"shed_level_name":   s.watchdog.CurrentLevel().String(),
 		"drop_counters":     drops,
 		"policy_conflicts":  s.effective.Conflicts,
 		"kill_switch":       s.effective.KillSwitchActive,
@@ -360,6 +376,56 @@ func (s *Supervisor) Status() map[string]any {
 	}
 
 	return status
+}
+
+func (s *Supervisor) handleShedChange(oldLevel, newLevel ShedLevel) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.logger.Info("applying watchdog shed transition",
+		slog.Int("old_level", int(oldLevel)),
+		slog.Int("new_level", int(newLevel)),
+		slog.String("level_name", newLevel.String()),
+	)
+
+	// Level 1: Stop optional modules: host metrics, log reading
+	if newLevel >= ShedLevelStopOptional {
+		if mod, ok := s.effective.Modules["logs"]; ok {
+			mod.Allowed = false
+		}
+	} else {
+		if mod, ok := s.localPolicy.Modules["logs"]; ok {
+			s.effective.Modules["logs"] = mod
+		}
+	}
+
+	// Level 3: Turn off protocol parsing and TLS inspection (Tier 2)
+	if newLevel >= ShedLevelTurnOffProto {
+		if s.capability.Tier == capability.TierFullEBPF {
+			s.capability.Tier = capability.TierReducedEBPF
+		}
+	} else if newLevel < ShedLevelTurnOffProto {
+		if s.capability.Tier == capability.TierReducedEBPF {
+			s.capability.Tier = capability.TierFullEBPF
+		}
+	}
+
+	// Level 4: Reduce flow table to top-N flows by bytes
+	if newLevel >= ShedLevelReduceFlows {
+		if s.flowTable != nil {
+			s.flowTable.PruneToTopN(500)
+			s.flowTable.SetMaxEdges(500)
+		}
+	} else if newLevel < ShedLevelReduceFlows {
+		if s.flowTable != nil {
+			s.flowTable.SetMaxEdges(2000)
+		}
+	}
+
+	// Level 5: Detach flow probes and fall back to procfs sampling (Tier 3)
+	if newLevel >= ShedLevelDetachProbes {
+		s.capability.Tier = capability.TierProcfs
+	}
 }
 
 // startIPC creates the local Unix domain socket HTTP listener.

@@ -1,0 +1,123 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: forgeops-agent
+  namespace: forgeops-system
+  labels:
+    app.kubernetes.io/name: forgeops-agent
+    app.kubernetes.io/part-of: forgeops
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: forgeops-agent
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: forgeops-agent
+    spec:
+      serviceAccountName: forgeops-agent
+      hostPID: true
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      tolerations:
+        - operator: Exists
+      containers:
+        # 1. Unprivileged Supervisor Container
+        - name: supervisor
+          image: ghcr.io/forgeops/forgeops-agent:v1.3.0
+          imagePullPolicy: IfNotPresent
+          command: ["/usr/bin/forgeops-agent"]
+          args:
+            - "--config=/etc/forgeops-agent/policy.yaml"
+            - "--state-dir=/var/lib/forgeops-agent"
+            - "--socket=/run/forgeops-agent/agent.sock"
+          env:
+            - name: FORGEOPS_CONTROL_PLANE_URL
+              value: "https://forgeops-control-plane.forgeops-system.svc.cluster.local:8443"
+            - name: FORGEOPS_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 65534
+            runAsGroup: 65534
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              cpu: 50m
+              memory: 64Mi
+          volumeMounts:
+            - name: run-dir
+              mountPath: /run/forgeops-agent
+            - name: state-dir
+              mountPath: /var/lib/forgeops-agent
+            - name: policy-config
+              mountPath: /etc/forgeops-agent
+              readOnly: true
+
+        # 2. Narrow Capability eBPF Worker Container
+        - name: ebpf-worker
+          image: ghcr.io/forgeops/forgeops-agent-ebpf:v1.3.0
+          imagePullPolicy: IfNotPresent
+          command: ["/usr/libexec/forgeops-agent/forgeops-agent-ebpf"]
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            privileged: false
+            capabilities:
+              drop: ["ALL"]
+              add:
+                - BPF
+                - PERFMON
+                - SYS_PTRACE
+                - NET_ADMIN
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 100m
+              memory: 384Mi
+          volumeMounts:
+            - name: run-dir
+              mountPath: /run/forgeops-agent
+            - name: btf
+              mountPath: /sys/kernel/btf
+              readOnly: true
+            - name: proc
+              mountPath: /proc
+              readOnly: true
+            - name: sys
+              mountPath: /sys
+              readOnly: true
+            - name: policy-config
+              mountPath: /etc/forgeops-agent
+              readOnly: true
+
+      volumes:
+        - name: run-dir
+          emptyDir: {}
+        - name: state-dir
+          hostPath:
+            path: /var/lib/forgeops-agent
+            type: DirectoryOrCreate
+        - name: policy-config
+          configMap:
+            name: forgeops-agent-policy
+        - name: btf
+          hostPath:
+            path: /sys/kernel/btf
+            type: DirectoryOrCreate
+        - name: proc
+          hostPath:
+            path: /proc
+        - name: sys
+          hostPath:
+            path: /sys

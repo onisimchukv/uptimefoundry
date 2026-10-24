@@ -1,0 +1,35 @@
+apiVersion: security.openshift.io/v1
+kind: SecurityContextConstraints
+metadata:
+  name: forgeops-agent-scc
+  labels:
+    app.kubernetes.io/name: forgeops-agent
+    app.kubernetes.io/part-of: forgeops
+allowHostDirVolumePlugin: true
+allowHostIPC: false
+allowHostNetwork: true
+allowHostPID: true
+allowHostPorts: false
+allowPrivilegeEscalation: false
+allowPrivilegedContainer: false
+allowedCapabilities:
+  - BPF
+  - PERFMON
+  - SYS_PTRACE
+  - NET_ADMIN
+defaultAddCapabilities: []
+requiredDropCapabilities:
+  - ALL
+readOnlyRootFilesystem: true
+runAsUser:
+  type: RunAsAny
+seLinuxContext:
+  type: MustRunAs
+users:
+  - system:serviceaccount:forgeops-system:forgeops-agent
+volumes:
+  - configMap
+  - downwardAPI
+  - emptyDir
+  - hostPath
+  - projected

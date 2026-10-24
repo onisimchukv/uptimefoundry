@@ -1,0 +1,51 @@
+[Unit]
+Description=ForgeOps Host Agent Supervisor
+Documentation=https://github.com/forgeops/forgeops
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=forgeops-agent
+Group=forgeops-agent
+ExecStart=/usr/bin/forgeops-agent --config /etc/forgeops-agent/policy.yaml
+Restart=on-failure
+RestartSec=5s
+
+# Security Hardening (Specification v1.3 Section 13.2)
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=read-only
+RestrictRealtime=yes
+MemoryDenyWriteExecute=yes
+LockPersonality=yes
+RestrictNamespaces=yes
+
+# Privilege Minimization: Supervisor holds zero capabilities
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+# Network Restrictions: Supervisor needs outbound TCP to control plane and AF_UNIX for IPC
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+# System Call Filtering
+SystemCallFilter=@system-service
+SystemCallFilter=~@mount @reboot @swap @clock @raw-io
+SystemCallErrorNumber=EPERM
+SystemCallArchitectures=native
+
+# Filesystem Access
+ReadWritePaths=/var/lib/forgeops-agent /run/forgeops-agent
+ReadOnlyPaths=/etc/forgeops-agent
+
+# Resource Budgets (Section 11.1)
+CPUQuota=2%
+MemoryHigh=48M
+MemoryMax=64M
+
+[Install]
+WantedBy=multi-user.target
