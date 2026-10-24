@@ -16,6 +16,7 @@ import (
 	"github.com/forgeops/forgeops/internal/adapters/host"
 	"github.com/forgeops/forgeops/internal/agent/capability"
 	"github.com/forgeops/forgeops/internal/agent/identity"
+	"github.com/forgeops/forgeops/internal/agent/obi"
 	"github.com/forgeops/forgeops/internal/agent/policy"
 	"github.com/forgeops/forgeops/internal/agent/protocol"
 	"github.com/forgeops/forgeops/internal/agent/wal"
@@ -42,6 +43,7 @@ type Supervisor struct {
 	capability     *capability.Report
 	wal            *wal.WAL
 	hostAdapter    adapters.DiscoveryAdapter
+	obiWrapper     *obi.Wrapper
 	ipcListener    net.Listener
 	logger         *slog.Logger
 	connected      bool
@@ -76,14 +78,17 @@ func New(cfg Config, logger *slog.Logger) (*Supervisor, error) {
 
 	prober := capability.NewProber(logger)
 	hostAdapter := host.New(logger)
+	effPolicy := locPol.Intersect(nil)
+	obiWrapper := obi.NewWrapper(effPolicy, logger)
 
 	return &Supervisor{
 		cfg:         cfg,
 		localPolicy: locPol,
-		effective:   locPol.Intersect(nil),
+		effective:   effPolicy,
 		prober:      prober,
 		wal:         w,
 		hostAdapter: hostAdapter,
+		obiWrapper:  obiWrapper,
 		logger:      logger,
 	}, nil
 }
