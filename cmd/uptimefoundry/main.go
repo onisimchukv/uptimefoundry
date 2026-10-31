@@ -13,27 +13,27 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/forgeops/forgeops/internal/adapters"
-	"github.com/forgeops/forgeops/internal/adapters/host"
-	"github.com/forgeops/forgeops/internal/agent/protocol"
-	"github.com/forgeops/forgeops/internal/config"
-	cpagent "github.com/forgeops/forgeops/internal/controlplane/agent"
-	"github.com/forgeops/forgeops/internal/core/models"
-	"github.com/forgeops/forgeops/internal/graph"
-	"github.com/forgeops/forgeops/internal/graph/age"
-	"github.com/forgeops/forgeops/internal/graph/fallback"
-	"github.com/forgeops/forgeops/internal/graph/traverser"
-	"github.com/forgeops/forgeops/internal/investigation/ai"
-	"github.com/forgeops/forgeops/internal/investigation/correlator"
-	mcpprotocol "github.com/forgeops/forgeops/internal/mcp/protocol"
-	mcpserver "github.com/forgeops/forgeops/internal/mcp/server"
-	"github.com/forgeops/forgeops/internal/rag/embeddings"
-	"github.com/forgeops/forgeops/internal/rag/graphrag"
-	"github.com/forgeops/forgeops/internal/rag/indexer"
-	"github.com/forgeops/forgeops/internal/storage/postgres"
-	"github.com/forgeops/forgeops/internal/telemetry"
-	"github.com/forgeops/forgeops/internal/telemetry/providers/loki"
-	"github.com/forgeops/forgeops/internal/telemetry/providers/victoriametrics"
+	"github.com/onisimchukv/uptimefoundry/internal/adapters"
+	"github.com/onisimchukv/uptimefoundry/internal/adapters/host"
+	"github.com/onisimchukv/uptimefoundry/internal/agent/protocol"
+	"github.com/onisimchukv/uptimefoundry/internal/config"
+	cpagent "github.com/onisimchukv/uptimefoundry/internal/controlplane/agent"
+	"github.com/onisimchukv/uptimefoundry/internal/core/models"
+	"github.com/onisimchukv/uptimefoundry/internal/graph"
+	"github.com/onisimchukv/uptimefoundry/internal/graph/age"
+	"github.com/onisimchukv/uptimefoundry/internal/graph/fallback"
+	"github.com/onisimchukv/uptimefoundry/internal/graph/traverser"
+	"github.com/onisimchukv/uptimefoundry/internal/investigation/ai"
+	"github.com/onisimchukv/uptimefoundry/internal/investigation/correlator"
+	mcpprotocol "github.com/onisimchukv/uptimefoundry/internal/mcp/protocol"
+	mcpserver "github.com/onisimchukv/uptimefoundry/internal/mcp/server"
+	"github.com/onisimchukv/uptimefoundry/internal/rag/embeddings"
+	"github.com/onisimchukv/uptimefoundry/internal/rag/graphrag"
+	"github.com/onisimchukv/uptimefoundry/internal/rag/indexer"
+	"github.com/onisimchukv/uptimefoundry/internal/storage/postgres"
+	"github.com/onisimchukv/uptimefoundry/internal/telemetry"
+	"github.com/onisimchukv/uptimefoundry/internal/telemetry/providers/loki"
+	"github.com/onisimchukv/uptimefoundry/internal/telemetry/providers/victoriametrics"
 )
 
 var (
@@ -42,7 +42,7 @@ var (
 )
 
 func main() {
-	configPath := flag.String("config", "configs/forgeops.example.yaml", "Path to ForgeOps YAML configuration file")
+	configPath := flag.String("config", "configs/uptimefoundry.example.yaml", "Path to UptimeFoundry YAML configuration file")
 	mcpStdio := flag.Bool("mcp", false, "Run Model Context Protocol server over stdio")
 	flag.Parse()
 
@@ -51,7 +51,7 @@ func main() {
 	}))
 	slog.SetDefault(logger)
 
-	logger.Info("starting forgeops control plane",
+	logger.Info("starting uptimefoundry control plane",
 		slog.String("version", version),
 		slog.String("build_time", buildTime),
 		slog.String("config", *configPath),

@@ -3,7 +3,7 @@ package protocol
 import (
 	"time"
 
-	"github.com/forgeops/forgeops/internal/core/models"
+	"github.com/onisimchukv/uptimefoundry/internal/core/models"
 )
 
 // ProtocolVersion tracks compatibility (supports N and N-1).

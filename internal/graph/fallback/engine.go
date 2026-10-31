@@ -8,8 +8,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/forgeops/forgeops/internal/core/models"
-	"github.com/forgeops/forgeops/internal/graph"
+	"github.com/onisimchukv/uptimefoundry/internal/core/models"
+	"github.com/onisimchukv/uptimefoundry/internal/graph"
 )
 
 // Engine implements graph.GraphEngine via PostgreSQL recursive CTEs.

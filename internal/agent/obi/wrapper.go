@@ -4,8 +4,8 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/forgeops/forgeops/internal/agent/policy"
-	"github.com/forgeops/forgeops/internal/agent/redaction"
+	"github.com/onisimchukv/uptimefoundry/internal/agent/policy"
+	"github.com/onisimchukv/uptimefoundry/internal/agent/redaction"
 )
 
 // PinnedVersion records the upstream OBI engine release.

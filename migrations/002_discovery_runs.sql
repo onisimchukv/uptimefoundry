@@ -1,4 +1,4 @@
--- ForgeOps Schema Migration 002: Discovery Runs Table
+-- UptimeFoundry Schema Migration 002: Discovery Runs Table
 
 CREATE TABLE IF NOT EXISTS discovery_runs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

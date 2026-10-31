@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgeops/forgeops/internal/telemetry"
+	"github.com/onisimchukv/uptimefoundry/internal/telemetry"
 )
 
 func TestLokiQueryLogs(t *testing.T) {

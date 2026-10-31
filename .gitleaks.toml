@@ -1,0 +1,4 @@
+# SPDX-License-Identifier: MIT
+# Keep the default Gitleaks rules active. Do not allowlist example/config paths:
+# those files can still accidentally contain live credentials.
+title = "UptimeFoundry secret scanning"

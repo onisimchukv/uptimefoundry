@@ -10,16 +10,38 @@ dist/
 # Test artifacts and coverage
 *.out
 coverage.html
+coverage.txt
 profile.pprof
 
 # eBPF compiled objects
 *.bpf.o
 internal/ebpf/bpf/*.o
 
-# Environment and secrets
+# Credentials, keys, certificates, and secrets
+*.pem
+*.key
+*.crt
+*.csr
+*.pfx
+*.p12
+*.keystore
+id_rsa*
+id_ed25519*
+
+# Environment and configuration secrets
 .env
+.env.*
+!.env.example
 *.local.yaml
+*.local.yml
 *.secret.yaml
+*.secret.yml
+
+# Runtime state and sockets
+state/
+run/
+*.sock
+diagnostics-*.tar.gz
 
 # IDE and editors
 .idea/

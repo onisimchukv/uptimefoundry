@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/forgeops/forgeops/internal/core/models"
-	"github.com/forgeops/forgeops/internal/core/ports"
-	"github.com/forgeops/forgeops/internal/mcp/protocol"
-	"github.com/forgeops/forgeops/internal/rag/graphrag"
-	"github.com/forgeops/forgeops/internal/telemetry"
+	"github.com/onisimchukv/uptimefoundry/internal/core/models"
+	"github.com/onisimchukv/uptimefoundry/internal/core/ports"
+	"github.com/onisimchukv/uptimefoundry/internal/mcp/protocol"
+	"github.com/onisimchukv/uptimefoundry/internal/rag/graphrag"
+	"github.com/onisimchukv/uptimefoundry/internal/telemetry"
 )
 
 // Config configures the MCP server.
@@ -74,7 +74,7 @@ func (s *Server) HandleRequest(ctx context.Context, req protocol.Request) protoc
 		resp.Result = protocol.InitializeResult{
 			ProtocolVersion: "2024-11-05",
 			ServerInfo: protocol.ServerInfo{
-				Name:    "forgeops-mcp-gateway",
+				Name:    "uptimefoundry-mcp-gateway",
 				Version: "1.2.0",
 			},
 			Capabilities: protocol.ServerCapabilities{
@@ -157,7 +157,7 @@ func (s *Server) HandleRequest(ctx context.Context, req protocol.Request) protoc
 func (s *Server) listTools() []protocol.Tool {
 	return []protocol.Tool{
 		{
-			Name:        "forgeops_get_topology",
+			Name:        "uptimefoundry_get_topology",
 			Description: "Query subgraphs around a resource up to N hops using openCypher / property graph.",
 			InputSchema: protocol.InputSchema{
 				Type: "object",
@@ -169,7 +169,7 @@ func (s *Server) listTools() []protocol.Tool {
 			},
 		},
 		{
-			Name:        "forgeops_query_metrics",
+			Name:        "uptimefoundry_query_metrics",
 			Description: "Execute bounded instant PromQL or MetricsQL queries against VictoriaMetrics.",
 			InputSchema: protocol.InputSchema{
 				Type: "object",
@@ -181,7 +181,7 @@ func (s *Server) listTools() []protocol.Tool {
 			},
 		},
 		{
-			Name:        "forgeops_query_logs",
+			Name:        "uptimefoundry_query_logs",
 			Description: "Search structured operational logs in Loki within an incident window.",
 			InputSchema: protocol.InputSchema{
 				Type: "object",
@@ -194,7 +194,7 @@ func (s *Server) listTools() []protocol.Tool {
 			},
 		},
 		{
-			Name:        "forgeops_search_knowledge",
+			Name:        "uptimefoundry_search_knowledge",
 			Description: "Perform GraphRAG vector and hybrid searches over internal runbooks and historical post-mortems.",
 			InputSchema: protocol.InputSchema{
 				Type: "object",
@@ -207,7 +207,7 @@ func (s *Server) listTools() []protocol.Tool {
 			},
 		},
 		{
-			Name:        "forgeops_get_incident_evidence",
+			Name:        "uptimefoundry_get_incident_evidence",
 			Description: "Retrieve all correlated telemetry, topology changes, and events for an active incident.",
 			InputSchema: protocol.InputSchema{
 				Type: "object",
@@ -218,7 +218,7 @@ func (s *Server) listTools() []protocol.Tool {
 			},
 		},
 		{
-			Name:        "forgeops_propose_remediation",
+			Name:        "uptimefoundry_propose_remediation",
 			Description: "Create a draft remediation proposal requiring human operator approval. Does not execute changes directly.",
 			InputSchema: protocol.InputSchema{
 				Type: "object",
@@ -236,7 +236,7 @@ func (s *Server) listTools() []protocol.Tool {
 
 func (s *Server) callTool(ctx context.Context, params protocol.CallToolParams) (protocol.CallToolResult, error) {
 	switch params.Name {
-	case "forgeops_get_topology":
+	case "uptimefoundry_get_topology":
 		resID, _ := params.Arguments["resource_id"].(string)
 		hops := 2
 		if h, ok := params.Arguments["hops"].(float64); ok && h > 0 {
@@ -259,7 +259,7 @@ func (s *Server) callTool(ctx context.Context, params protocol.CallToolParams) (
 		}, "", "  ")
 		return protocol.CallToolResult{Content: []protocol.ToolContent{{Type: "text", Text: string(out)}}}, nil
 
-	case "forgeops_query_metrics":
+	case "uptimefoundry_query_metrics":
 		query, _ := params.Arguments["query"].(string)
 		if s.metrics == nil {
 			return protocol.CallToolResult{}, fmt.Errorf("metrics provider not configured")
@@ -271,7 +271,7 @@ func (s *Server) callTool(ctx context.Context, params protocol.CallToolParams) (
 		out, _ := json.MarshalIndent(res, "", "  ")
 		return protocol.CallToolResult{Content: []protocol.ToolContent{{Type: "text", Text: string(out)}}}, nil
 
-	case "forgeops_query_logs":
+	case "uptimefoundry_query_logs":
 		query, _ := params.Arguments["query"].(string)
 		limit := 50
 		if l, ok := params.Arguments["limit"].(float64); ok && l > 0 {
@@ -294,7 +294,7 @@ func (s *Server) callTool(ctx context.Context, params protocol.CallToolParams) (
 		out, _ := json.MarshalIndent(res, "", "  ")
 		return protocol.CallToolResult{Content: []protocol.ToolContent{{Type: "text", Text: string(out)}}}, nil
 
-	case "forgeops_search_knowledge":
+	case "uptimefoundry_search_knowledge":
 		query, _ := params.Arguments["query"].(string)
 		if s.knowledgeRepo == nil {
 			return protocol.CallToolResult{}, fmt.Errorf("knowledge repository not configured")
@@ -310,7 +310,7 @@ func (s *Server) callTool(ctx context.Context, params protocol.CallToolParams) (
 		out, _ := json.MarshalIndent(results, "", "  ")
 		return protocol.CallToolResult{Content: []protocol.ToolContent{{Type: "text", Text: string(out)}}}, nil
 
-	case "forgeops_get_incident_evidence":
+	case "uptimefoundry_get_incident_evidence":
 		incID, _ := params.Arguments["incident_id"].(string)
 		if s.incidentRepo == nil {
 			return protocol.CallToolResult{}, fmt.Errorf("incident repository not configured")
@@ -322,7 +322,7 @@ func (s *Server) callTool(ctx context.Context, params protocol.CallToolParams) (
 		out, _ := json.MarshalIndent(inc, "", "  ")
 		return protocol.CallToolResult{Content: []protocol.ToolContent{{Type: "text", Text: string(out)}}}, nil
 
-	case "forgeops_propose_remediation":
+	case "uptimefoundry_propose_remediation":
 		invID, _ := params.Arguments["investigation_id"].(string)
 		title, _ := params.Arguments["title"].(string)
 		actType, _ := params.Arguments["action_type"].(string)
@@ -355,25 +355,25 @@ func (s *Server) callTool(ctx context.Context, params protocol.CallToolParams) (
 func (s *Server) listResources() []protocol.Resource {
 	return []protocol.Resource{
 		{
-			URI:         "forgeops://environments/{env}/topology",
+			URI:         "uptimefoundry://environments/{env}/topology",
 			Name:        "Environment Topology",
 			Description: "Live property graph topology of an environment",
 			MimeType:    "application/json",
 		},
 		{
-			URI:         "forgeops://incidents/{id}/evidence",
+			URI:         "uptimefoundry://incidents/{id}/evidence",
 			Name:        "Incident Evidence Bundle",
 			Description: "Multimodal evidence collected for an incident",
 			MimeType:    "application/json",
 		},
 		{
-			URI:         "forgeops://resources/{id}/health",
+			URI:         "uptimefoundry://resources/{id}/health",
 			Name:        "Resource Health",
 			Description: "Live health and eBPF socket metrics for a specific resource",
 			MimeType:    "application/json",
 		},
 		{
-			URI:         "forgeops://runbooks/{slug}",
+			URI:         "uptimefoundry://runbooks/{slug}",
 			Name:        "Verified Runbook",
 			Description: "Operational runbook documentation markdown",
 			MimeType:    "text/markdown",
@@ -382,7 +382,7 @@ func (s *Server) listResources() []protocol.Resource {
 }
 
 func (s *Server) readResource(ctx context.Context, uri string) (protocol.ReadResourceResult, error) {
-	if strings.HasPrefix(uri, "forgeops://environments/") && strings.HasSuffix(uri, "/topology") {
+	if strings.HasPrefix(uri, "uptimefoundry://environments/") && strings.HasSuffix(uri, "/topology") {
 		parts := strings.Split(uri, "/")
 		if len(parts) >= 4 {
 			envID := parts[3]
@@ -396,7 +396,7 @@ func (s *Server) readResource(ctx context.Context, uri string) (protocol.ReadRes
 				}
 			}
 		}
-	} else if strings.HasPrefix(uri, "forgeops://incidents/") && strings.HasSuffix(uri, "/evidence") {
+	} else if strings.HasPrefix(uri, "uptimefoundry://incidents/") && strings.HasSuffix(uri, "/evidence") {
 		parts := strings.Split(uri, "/")
 		if len(parts) >= 4 {
 			incID := parts[3]

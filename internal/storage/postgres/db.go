@@ -10,7 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	pgxvec "github.com/pgvector/pgvector-go/pgx"
 
-	"github.com/forgeops/forgeops/internal/config"
+	"github.com/onisimchukv/uptimefoundry/internal/config"
 )
 
 // DB wraps the PostgreSQL connection pool and health checks.

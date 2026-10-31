@@ -8,7 +8,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Config represents the complete ForgeOps operational configuration.
+// Config represents the complete UptimeFoundry operational configuration.
 type Config struct {
 	Server    ServerConfig    `yaml:"server"`
 	Database  DatabaseConfig  `yaml:"database"`
@@ -197,20 +197,20 @@ type RemediationSecurityConfig struct {
 func DefaultConfig() *Config {
 	return &Config{
 		Server: ServerConfig{
-			ListenAddress: "0.0.0.0:8080",
+			ListenAddress: "127.0.0.1:8080",
 			TLS: TLSConfig{
 				Enabled: false,
 			},
 		},
 		Database: DatabaseConfig{
-			DSN:                "postgres://forgeops:forgeops@localhost:5432/forgeops?sslmode=disable",
+			DSN:                "",
 			MaxOpenConnections: 25,
 			MaxIdleConnections: 5,
 			ConnMaxLifetime:    15 * time.Minute,
 			Extensions: ExtensionsConfig{
 				AGE: AGEExtensionConfig{
 					Enabled:   true,
-					GraphName: "forgeops_graph",
+					GraphName: "opsfoundry_graph",
 				},
 				Vector: VectorExtensionConfig{
 					Enabled:            true,

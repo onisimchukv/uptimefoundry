@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/forgeops/forgeops/internal/core/models"
+	"github.com/onisimchukv/uptimefoundry/internal/core/models"
 )
 
 func TestHostDiscovery(t *testing.T) {

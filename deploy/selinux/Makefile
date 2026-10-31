@@ -1,5 +1,5 @@
-# Makefile for ForgeOps Agent SELinux Policy Module
-MODULE = forgeops_agent
+# Makefile for UptimeFoundry Agent SELinux Policy Module
+MODULE = uptimefoundry_agent
 SHARE = /usr/share/selinux/devel
 
 all: $(MODULE).pp

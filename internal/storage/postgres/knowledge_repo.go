@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/forgeops/forgeops/internal/core/models"
+	"github.com/onisimchukv/uptimefoundry/internal/core/models"
 	"github.com/jackc/pgx/v5"
 	"github.com/pgvector/pgvector-go"
 )

@@ -41,14 +41,14 @@ func main() {
 	command := args[0]
 	switch command {
 	case "version":
-		fmt.Printf("forgeops-agentctl %s\n", ctlVersion)
+		fmt.Printf("uptimefoundry-agentctl %s\n", ctlVersion)
 
 	case "status":
 		handleStatus(client)
 
 	case "policy":
 		if len(args) < 2 || args[1] != "show" {
-			fmt.Println("Usage: forgeops-agentctl policy show")
+			fmt.Println("Usage: uptimefoundry-agentctl policy show")
 			os.Exit(1)
 		}
 		handlePolicyShow(client)
@@ -64,10 +64,10 @@ func main() {
 }
 
 func printUsage() {
-	fmt.Print(`forgeops-agentctl - Host Agent Inspection & Management CLI
+	fmt.Print(`uptimefoundry-agentctl - Host Agent Inspection & Management CLI
 
 Usage:
-  forgeops-agentctl [flags] <command> [arguments...]
+  uptimefoundry-agentctl [flags] <command> [arguments...]
 
 Flags:
   -socket string   Path to supervisor Unix domain socket (default: ./state/agent.sock)
@@ -95,7 +95,7 @@ func handleStatus(client *http.Client) {
 	}
 
 	fmt.Println("\n=======================================================")
-	fmt.Println(" FORGEOPS-AGENT OPERATIONAL STATUS (v1.3)")
+	fmt.Println(" UPTIMEFOUNDRY-AGENT OPERATIONAL STATUS (v1.3)")
 	fmt.Println("=======================================================")
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintf(w, "Agent ID:\t%v\n", status["agent_id"])

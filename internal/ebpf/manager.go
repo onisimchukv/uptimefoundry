@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/forgeops/forgeops/internal/telemetry"
+	"github.com/onisimchukv/uptimefoundry/internal/telemetry"
 )
 
 // Manager coordinates zero-code kernel probes and protocol tracers.

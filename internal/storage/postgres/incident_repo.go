@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/forgeops/forgeops/internal/core/models"
+	"github.com/onisimchukv/uptimefoundry/internal/core/models"
 )
 
 // IncidentRepo manages persistence for incidents, investigations, and remediation proposals.

@@ -6,10 +6,10 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/forgeops/forgeops/internal/core/models"
-	"github.com/forgeops/forgeops/internal/core/ports"
-	"github.com/forgeops/forgeops/internal/rag/graphrag"
-	"github.com/forgeops/forgeops/internal/telemetry"
+	"github.com/onisimchukv/uptimefoundry/internal/core/models"
+	"github.com/onisimchukv/uptimefoundry/internal/core/ports"
+	"github.com/onisimchukv/uptimefoundry/internal/rag/graphrag"
+	"github.com/onisimchukv/uptimefoundry/internal/telemetry"
 )
 
 // EvidenceBundle contains deterministic operational evidence collected for an incident.

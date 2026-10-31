@@ -12,8 +12,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/forgeops/forgeops/internal/adapters"
-	"github.com/forgeops/forgeops/internal/core/models"
+	"github.com/onisimchukv/uptimefoundry/internal/adapters"
+	"github.com/onisimchukv/uptimefoundry/internal/core/models"
 )
 
 // Adapter implements adapters.DiscoveryAdapter for Linux / bare-metal hosts.
@@ -54,7 +54,7 @@ func (a *Adapter) Discover(ctx context.Context, envID string) (*adapters.Discove
 		"os":           runtime.GOOS,
 		"arch":         runtime.GOARCH,
 		"num_cpu":      runtime.NumCPU(),
-		"discovered_by": "forgeops-host-adapter",
+		"discovered_by": "uptimefoundry-host-adapter",
 	}
 
 	// Enrich with platform-specific attributes (e.g. /etc/os-release on Linux)

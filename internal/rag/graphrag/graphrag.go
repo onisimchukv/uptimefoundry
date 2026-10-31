@@ -6,9 +6,9 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/forgeops/forgeops/internal/core/models"
-	"github.com/forgeops/forgeops/internal/core/ports"
-	"github.com/forgeops/forgeops/internal/rag/embeddings"
+	"github.com/onisimchukv/uptimefoundry/internal/core/models"
+	"github.com/onisimchukv/uptimefoundry/internal/core/ports"
+	"github.com/onisimchukv/uptimefoundry/internal/rag/embeddings"
 )
 
 // GroundedContext represents the structured context provided to AI investigators.

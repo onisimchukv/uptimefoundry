@@ -74,7 +74,7 @@ func CreateCSR(key *ecdsa.PrivateKey, commonName string) ([]byte, error) {
 	template := x509.CertificateRequest{
 		Subject: pkix.Name{
 			CommonName:   commonName,
-			Organization: []string{"ForgeOps Agent"},
+			Organization: []string{"UptimeFoundry Agent"},
 		},
 		SignatureAlgorithm: x509.ECDSAWithSHA256,
 	}

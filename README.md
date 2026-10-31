@@ -1,71 +1,81 @@
-# ForgeOps
+<!-- SPDX-License-Identifier: MIT -->
+# UptimeFoundry
 
-**Self-Hosted DevOps and SRE Automation Platform**
+**Self-hosted SRE and operations tooling in Go**
 
-ForgeOps is a sovereign, self-hosted reliability engineering platform built in Go. It discovers heterogeneous infrastructure, continuously builds a property graph topology, correlates zero-touch eBPF telemetry with VictoriaMetrics and Loki, grounds incident investigation in internal runbooks using GraphRAG, and exposes native Model Context Protocol (MCP) interfaces to external AI assistants.
+UptimeFoundry is in design and early implementation. The repository contains working foundations for a Go control-plane process, PostgreSQL persistence, host discovery, telemetry query clients, MCP transports, and an agent process split. The full platform described by the specifications—including production eBPF collection, end-to-end mTLS enrollment, and safe autonomous remediation—is not yet a released, production-ready product.
 
----
+## What works in this repository
 
-## Architecture Highlights (v1.2)
+- The control-plane binary starts and serves `/readyz` and `/api/v1/status`.
+- PostgreSQL storage, migrations, discovery repositories, and graph fallbacks are implemented in the codebase; configure a database to use the persistent path.
+- Host inventory collectors and VictoriaMetrics and Loki query clients are present.
+- MCP stdio and SSE server transports and a client are implemented.
+- Agent, discovery, eBPF-worker, and actuator command entry points exist. Their presence does not mean the complete v1.3 agent design or production eBPF probe set is implemented.
 
-* **Unified PostgreSQL Storage:** Single database engine combining Relational ACID metadata, **Apache AGE** (openCypher property graph), and **pgvector** (HNSW vector index for RAG).
-* **OpenTelemetry eBPF Instrumentation (OBI):** Zero-code RED metrics (HTTP/gRPC/SQL), user-space TLS inspection via uprobes, and live socket connection tracking (`CONNECTS_TO` edges with RTT).
-* **Operational GraphRAG:** Subgraph-filtered vector search over organizational runbooks, SOPs, and post-mortems.
-* **Model Context Protocol (MCP):** Dual-mode MCP Server (stdio & SSE) and Client gateway.
-* **Controlled Remediation:** Explicit human-in-the-loop (HITL) authorization with cryptographic audit logging.
+GraphRAG, eBPF/OBI coverage, Kubernetes discovery, signed remediation, and the v1.3 agent architecture should be treated as design or early implementation until the relevant behavior is verified and released. See [the specifications](docs/specs/) for the design status and version history.
 
----
+## Development quick start
 
-## Directory Structure
+This quick start is for local development only. It exposes the control-plane health endpoints over plain HTTP on loopback. Do not use this configuration beyond local development. Any non-local deployment must use TLS with certificate verification; agent-to-control-plane communication must follow the mTLS requirements in the agent specification.
 
-```text
-forgeops/
-├── cmd/
-│   ├── forgeops/         # Main Control Plane server
-│   ├── forgeops-agent/   # Host agent with eBPF / OBI
-│   ├── forgeops-cli/     # Administrative CLI
-│   └── forgeops-mcp/     # Dedicated MCP server binary
-├── configs/              # Default YAML configurations
-├── deploy/               # Docker Compose, systemd, K8s manifests
-├── internal/
-│   ├── adapters/         # Host (sysfs/procfs), K8s, Docker Swarm adapters
-│   ├── config/           # YAML configuration parser & validation
-│   ├── core/             # Core domain models and interfaces
-│   ├── ebpf/             # OBI kernel & uprobe probe engine
-│   ├── graph/            # Apache AGE property graph traverser
-│   ├── investigation/    # Incident detection & correlation engine
-│   ├── mcp/              # Model Context Protocol server/client
-│   ├── rag/              # Markdown chunker & pgvector retrieval
-│   ├── remediation/      # Human-in-the-loop remediation guard
-│   ├── storage/          # PostgreSQL migrations & pgx connection pool
-│   └── telemetry/        # VictoriaMetrics, Prometheus, Loki providers
-├── migrations/           # SQL schema (relational, AGE, pgvector)
-├── Makefile
-├── go.mod
-└── go.sum
-```
+### Requirements
 
----
+- Go 1.23 or newer (the repository toolchain is Go 1.27.0)
+- Docker and Docker Compose
 
-## Quick Start (Development)
+### Start the local data services
 
-### 1. Prerequisites
-* Go 1.23+ (or 1.27+)
-* Docker and Docker Compose
+Set a throwaway development-only database password in your shell, then start the compose stack. For PowerShell:
 
-### 2. Start PostgreSQL, VictoriaMetrics, and Loki
-```bash
+```powershell
+$env:UPTIMEFOUNDRY_DEV_DB_PASSWORD = 'replace-with-a-local-development-password'
 docker compose -f deploy/docker-compose/docker-compose.dev.yml up -d
 ```
 
-### 3. Build and Run the Control Plane
-```bash
-go build -o bin/forgeops ./cmd/forgeops
-./bin/forgeops -config configs/forgeops.example.yaml
+For a POSIX shell:
+
+```sh
+export UPTIMEFOUNDRY_DEV_DB_PASSWORD='replace-with-a-local-development-password'
+docker compose -f deploy/docker-compose/docker-compose.dev.yml up -d
 ```
 
-### 4. Verify Health
-```bash
-curl -s http://localhost:8080/readyz
-curl -s http://localhost:8080/api/v1/status
+The database, VictoriaMetrics, and Loki ports are published only on `127.0.0.1`. The password is required and has no committed fallback. This stack is not hardened for production.
+
+### Configure and run the control plane
+
+Copy `configs/uptimefoundry.example.yaml` to an ignored local file such as `configs/uptimefoundry.local.yaml`. Set `database.dsn` to `postgres://opsfoundry:<your-password>@127.0.0.1:5432/opsfoundry?sslmode=disable`, keep the server bound to `127.0.0.1:8080`, and leave TLS disabled only for this local development setup.
+
+```sh
+go build -o bin/uptimefoundry ./cmd/uptimefoundry
+./bin/uptimefoundry -config configs/uptimefoundry.local.yaml
 ```
+
+In another terminal, check the local endpoints:
+
+```sh
+curl --fail http://127.0.0.1:8080/readyz
+curl --fail http://127.0.0.1:8080/api/v1/status
+```
+
+The HTTP examples above are development-only. For any deployment accessible beyond the local machine, configure TLS and certificate verification before exposing endpoints.
+
+## Repository layout
+
+```text
+cmd/                 Control plane, agent, CLI, and worker binaries
+configs/             Example configuration
+deploy/              Development Compose, systemd, Kubernetes, RPM, SELinux
+docs/specs/           Versioned design specifications
+internal/             Agent, control plane, storage, graph, MCP, and telemetry code
+migrations/           PostgreSQL schema migrations
+scripts/              Release-supporting utilities
+```
+
+## Security
+
+Please report vulnerabilities privately. See [SECURITY.md](SECURITY.md). Do not put credentials in example configs or commit local config files. The project is not yet a supported production release; review deployment manifests and the current implementation against your security requirements before use.
+
+## License
+
+MIT. New source files should carry the SPDX identifier `MIT` in the language's comment syntax (for example, `// SPDX-License-Identifier: MIT` in Go and `# SPDX-License-Identifier: MIT` in YAML). Markdown files may use an HTML comment. The root [LICENSE](LICENSE) is authoritative.

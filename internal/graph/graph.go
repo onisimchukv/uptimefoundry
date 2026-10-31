@@ -3,7 +3,7 @@ package graph
 import (
 	"context"
 
-	"github.com/forgeops/forgeops/internal/core/models"
+	"github.com/onisimchukv/uptimefoundry/internal/core/models"
 )
 
 // GraphEngine abstracts graph topology storage and traversal operations.

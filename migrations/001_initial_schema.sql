@@ -1,4 +1,4 @@
--- ForgeOps Schema Migration 001: Initial Relational, Property Graph, and Vector Schema
+-- UptimeFoundry Schema Migration 001: Initial Relational, Property Graph, and Vector Schema
 
 -- 1. Enable Core and Vector Extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -12,7 +12,7 @@ BEGIN
         SELECT 1 FROM pg_available_extensions WHERE name = 'age'
     ) THEN
         CREATE EXTENSION IF NOT EXISTS "age";
-        PERFORM create_graph('forgeops_graph');
+        PERFORM create_graph('opsfoundry_graph');
     ELSE
         RAISE NOTICE 'Apache AGE extension not found in system libraries; falling back to relational adjacency graph';
     END IF;

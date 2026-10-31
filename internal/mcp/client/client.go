@@ -10,7 +10,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/forgeops/forgeops/internal/mcp/protocol"
+	"github.com/onisimchukv/uptimefoundry/internal/mcp/protocol"
 )
 
 // Client communicates with an external MCP server over stdio subprocess.
@@ -60,7 +60,7 @@ func StartSubprocess(ctx context.Context, command string, args []string, env map
 	initParams, _ := json.Marshal(protocol.InitializeParams{
 		ProtocolVersion: "2024-11-05",
 		ClientInfo: protocol.ClientInfo{
-			Name:    "forgeops-mcp-client",
+			Name:    "uptimefoundry-mcp-client",
 			Version: "1.2.0",
 		},
 	})

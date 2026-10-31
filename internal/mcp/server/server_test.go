@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgeops/forgeops/internal/core/models"
-	"github.com/forgeops/forgeops/internal/mcp/protocol"
-	"github.com/forgeops/forgeops/internal/telemetry"
+	"github.com/onisimchukv/uptimefoundry/internal/core/models"
+	"github.com/onisimchukv/uptimefoundry/internal/mcp/protocol"
+	"github.com/onisimchukv/uptimefoundry/internal/telemetry"
 )
 
 type mockResourceRepo struct{}
@@ -111,9 +111,9 @@ func TestMCPServer_CallTool_MetricsAndTopology(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	srv := NewServer(Config{}, &mockResourceRepo{}, nil, nil, nil, &mockMetricsProvider{}, nil, nil, logger)
 
-	// Call forgeops_query_metrics
+	// Call uptimefoundry_query_metrics
 	metricArgs, _ := json.Marshal(protocol.CallToolParams{
-		Name:      "forgeops_query_metrics",
+		Name:      "uptimefoundry_query_metrics",
 		Arguments: map[string]any{"query": "up{job=\"payment\"}"},
 	})
 	callReq := protocol.Request{
@@ -131,9 +131,9 @@ func TestMCPServer_CallTool_MetricsAndTopology(t *testing.T) {
 		t.Fatalf("expected response to contain series data, got: %s", callRes.Content[0].Text)
 	}
 
-	// Call forgeops_get_topology
+	// Call uptimefoundry_get_topology
 	topoArgs, _ := json.Marshal(protocol.CallToolParams{
-		Name:      "forgeops_get_topology",
+		Name:      "uptimefoundry_get_topology",
 		Arguments: map[string]any{"resource_id": "root-1", "hops": 2.0},
 	})
 	callReq.Params = topoArgs
@@ -153,7 +153,7 @@ func TestMCPServer_ProposeRemediation_DraftOnly(t *testing.T) {
 	srv := NewServer(Config{}, nil, nil, mockRem, nil, nil, nil, nil, logger)
 
 	remArgs, _ := json.Marshal(protocol.CallToolParams{
-		Name: "forgeops_propose_remediation",
+		Name: "uptimefoundry_propose_remediation",
 		Arguments: map[string]any{
 			"investigation_id": "inv-99",
 			"title":            "Restart Payment Pods",

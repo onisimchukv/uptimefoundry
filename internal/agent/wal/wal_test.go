@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/forgeops/forgeops/internal/agent/protocol"
+	"github.com/onisimchukv/uptimefoundry/internal/agent/protocol"
 )
 
 func TestWALBufferingAndPriority(t *testing.T) {

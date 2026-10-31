@@ -31,7 +31,7 @@ type Remediation struct {
 	CreatedAt       time.Time         `json:"created_at"`
 }
 
-// AuditEvent records every privileged, administrative, or mutation action taken in ForgeOps.
+// AuditEvent records every privileged, administrative, or mutation action taken in UptimeFoundry.
 type AuditEvent struct {
 	ID           string         `json:"id"`
 	Actor        string         `json:"actor"`

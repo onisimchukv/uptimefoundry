@@ -3,7 +3,7 @@ package ports
 import (
 	"context"
 
-	"github.com/forgeops/forgeops/internal/core/models"
+	"github.com/onisimchukv/uptimefoundry/internal/core/models"
 )
 
 // ResourceRepository defines persistence operations for resources and relationships.

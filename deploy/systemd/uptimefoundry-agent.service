@@ -1,14 +1,14 @@
 [Unit]
-Description=ForgeOps Host Agent Supervisor
-Documentation=https://github.com/forgeops/forgeops
+Description=UptimeFoundry Host Agent Supervisor
+Documentation=https://github.com/onisimchukv/uptimefoundry
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-User=forgeops-agent
-Group=forgeops-agent
-ExecStart=/usr/bin/forgeops-agent --config /etc/forgeops-agent/policy.yaml
+User=uptimefoundry-agent
+Group=uptimefoundry-agent
+ExecStart=/usr/bin/uptimefoundry-agent --config /etc/uptimefoundry-agent/policy.yaml
 Restart=on-failure
 RestartSec=5s
 
@@ -39,8 +39,8 @@ SystemCallErrorNumber=EPERM
 SystemCallArchitectures=native
 
 # Filesystem Access
-ReadWritePaths=/var/lib/forgeops-agent /run/forgeops-agent
-ReadOnlyPaths=/etc/forgeops-agent
+ReadWritePaths=/var/lib/uptimefoundry-agent /run/uptimefoundry-agent
+ReadOnlyPaths=/etc/uptimefoundry-agent
 
 # Resource Budgets (Section 11.1)
 CPUQuota=2%

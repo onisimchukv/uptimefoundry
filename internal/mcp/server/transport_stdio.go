@@ -8,7 +8,7 @@ import (
 	"io"
 	"log/slog"
 
-	"github.com/forgeops/forgeops/internal/mcp/protocol"
+	"github.com/onisimchukv/uptimefoundry/internal/mcp/protocol"
 )
 
 // RunStdio listens for JSON-RPC 2.0 messages from stdin and writes responses to stdout.

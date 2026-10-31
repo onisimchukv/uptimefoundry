@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/forgeops/forgeops/internal/config"
-	"github.com/forgeops/forgeops/internal/core/models"
-	"github.com/forgeops/forgeops/internal/core/ports"
-	"github.com/forgeops/forgeops/internal/investigation/correlator"
+	"github.com/onisimchukv/uptimefoundry/internal/config"
+	"github.com/onisimchukv/uptimefoundry/internal/core/models"
+	"github.com/onisimchukv/uptimefoundry/internal/core/ports"
+	"github.com/onisimchukv/uptimefoundry/internal/investigation/correlator"
 )
 
 // LLMResponseSchema defines the expected structured output from the AI model.
@@ -168,7 +168,7 @@ type openAIChatResponse struct {
 }
 
 func (inv *Investigator) runLLMInference(ctx context.Context, inc *models.Incident, bundle *correlator.EvidenceBundle) (LLMResponseSchema, error) {
-	systemPrompt := `You are the ForgeOps AI SRE Investigator. Your mission is to analyze operational incidents and form diagnostic hypotheses.
+	systemPrompt := `You are the UptimeFoundry AI SRE Investigator. Your mission is to analyze operational incidents and form diagnostic hypotheses.
 CRITICAL RULES:
 1. Ground truth only: Rely exclusively on the provided deterministic telemetry evidence and runbook excerpts.
 2. Every hypothesis MUST include citations to relevant runbook sections in markdown format ([Runbook: path#section]) and supporting evidence IDs (e.g. ev-metric-01).

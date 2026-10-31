@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/forgeops/forgeops/internal/agent/supervisor"
+	"github.com/onisimchukv/uptimefoundry/internal/agent/supervisor"
 )
 
 var (
@@ -31,7 +31,7 @@ func main() {
 	}))
 	slog.SetDefault(logger)
 
-	logger.Info("starting forgeops-agent supervisor (v1.3 security-boundary)",
+	logger.Info("starting uptimefoundry-agent supervisor (v1.3 security-boundary)",
 		slog.String("version", agentVersion),
 		slog.String("build_time", buildTime),
 		slog.String("control_plane", *serverURL),
@@ -70,5 +70,5 @@ func main() {
 	logger.Info("shutdown signal received; commencing agent teardown")
 
 	sup.Stop()
-	logger.Info("forgeops-agent supervisor stopped cleanly")
+	logger.Info("uptimefoundry-agent supervisor stopped cleanly")
 }

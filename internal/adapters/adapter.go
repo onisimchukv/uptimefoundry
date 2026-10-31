@@ -3,7 +3,7 @@ package adapters
 import (
 	"context"
 
-	"github.com/forgeops/forgeops/internal/core/models"
+	"github.com/onisimchukv/uptimefoundry/internal/core/models"
 )
 
 // DiscoveryResult contains the resources and relationships collected during a single adapter scan.

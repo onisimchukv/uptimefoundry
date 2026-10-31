@@ -1,0 +1,15 @@
+# Executables
+/usr/bin/uptimefoundry-agent                 -- gen_context(system_u:object_r:uptimefoundry_agent_exec_t,s0)
+/usr/bin/uptimefoundry-agentctl              -- gen_context(system_u:object_r:bin_t,s0)
+/usr/libexec/uptimefoundry-agent/uptimefoundry-agent-discovery -- gen_context(system_u:object_r:uptimefoundry_agent_discovery_exec_t,s0)
+/usr/libexec/uptimefoundry-agent/uptimefoundry-agent-ebpf      -- gen_context(system_u:object_r:uptimefoundry_agent_ebpf_exec_t,s0)
+/usr/libexec/uptimefoundry-agent/uptimefoundry-agent-actuator  -- gen_context(system_u:object_r:uptimefoundry_agent_actuator_exec_t,s0)
+
+# Configuration
+/etc/uptimefoundry-agent(/.*)?                  gen_context(system_u:object_r:uptimefoundry_agent_conf_t,s0)
+
+# State, Identity & WAL
+/var/lib/uptimefoundry-agent(/.*)?              gen_context(system_u:object_r:uptimefoundry_agent_var_lib_t,s0)
+
+# Runtime Sockets
+/run/uptimefoundry-agent(/.*)?                  gen_context(system_u:object_r:uptimefoundry_agent_var_run_t,s0)

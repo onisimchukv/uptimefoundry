@@ -12,9 +12,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/forgeops/forgeops/internal/core/models"
-	"github.com/forgeops/forgeops/internal/core/ports"
-	"github.com/forgeops/forgeops/internal/graph"
+	"github.com/onisimchukv/uptimefoundry/internal/core/models"
+	"github.com/onisimchukv/uptimefoundry/internal/core/ports"
+	"github.com/onisimchukv/uptimefoundry/internal/graph"
 )
 
 // ResourceRepository implements ports.ResourceRepository on PostgreSQL.

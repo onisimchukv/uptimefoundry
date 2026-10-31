@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/forgeops/forgeops/internal/telemetry"
+	"github.com/onisimchukv/uptimefoundry/internal/telemetry"
 )
 
 // Client implements telemetry.LogsProvider for Grafana Loki.

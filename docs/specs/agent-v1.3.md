@@ -1,10 +1,15 @@
-# ForgeOps Agent — Technical Specification v1.3
+<!-- SPDX-License-Identifier: MIT -->
+# Status: Current agent design specification
+
+This is the current design specification for the agent. It does not imply that every specified component is implemented or released.
+
+# UptimeFoundry Agent — Technical Specification v1.3
 
 Oct 24, 2026 · @Vitalii
 
 ## 1. Purpose, scope, and changes from v1.2
 
-`forgeops-agent` is a host-resident component that gathers discovery data, network-flow topology and optional zero-code telemetry from Linux hosts and reports it to the ForgeOps control plane. It is the highest-privilege and most widely deployed part of the platform, so v1.3 treats it as a security boundary first and a feature set second.
+`uptimefoundry-agent` is a host-resident component that gathers discovery data, network-flow topology and optional zero-code telemetry from Linux hosts and reports it to the UptimeFoundry control plane. It is the highest-privilege and most widely deployed part of the platform, so v1.3 treats it as a security boundary first and a feature set second.
 
 ### 1.1 Goals
 
@@ -103,9 +108,9 @@ Discovery and eBPF hand schema-checked records to the supervisor over local sock
 
 | Process | Runs as | Responsibility | Network |
 | --- | --- | --- | --- |
-| `supervisor` | `forgeops-agent` user, no capabilities | Enrollment, mTLS stream, policy intersection, WAL, watchdog, child lifecycle | Outbound to the control-plane endpoint only |
-| `discovery` | `forgeops-agent-disc` user, no capabilities | Host inventory from procfs, sysfs and D-Bus | None |
-| `ebpf` | `forgeops-agent-ebpf` user, narrow capability set | Flow tracking, supervised OBI child, parsers, redaction | None; `AF_UNIX` and `AF_NETLINK` only |
+| `supervisor` | `uptimefoundry-agent` user, no capabilities | Enrollment, mTLS stream, policy intersection, WAL, watchdog, child lifecycle | Outbound to the control-plane endpoint only |
+| `discovery` | `uptimefoundry-agent-disc` user, no capabilities | Host inventory from procfs, sysfs and D-Bus | None |
+| `ebpf` | `uptimefoundry-agent-ebpf` user, narrow capability set | Flow tracking, supervised OBI child, parsers, redaction | None; `AF_UNIX` and `AF_NETLINK` only |
 | `actuator` | Separate unit and package | Approved host actions (A5 and later) | Local only; receives instructions through the supervisor |
 
 ### 3.2 Capabilities per process
@@ -145,7 +150,7 @@ Every agent proves a stable host identity with a short-lived mTLS certificate th
 3. On first start the agent generates an asymmetric key pair locally (ECDSA P-256 or Ed25519). The private key never leaves the host.
 4. The agent connects to the control plane over TLS, verifying the server against the configured CA bundle or a pinned certificate fingerprint, and sends a certificate signing request, the token and a signed capability report (section 6).
 5. The control plane validates the token, records the host, issues a client certificate and returns it with the current agent policy.
-6. The agent stores the key and certificate under `/var/lib/forgeops-agent/identity/` with mode `0600`, owned by the agent user, and discards the token.
+6. The agent stores the key and certificate under `/var/lib/uptimefoundry-agent/identity/` with mode `0600`, owned by the agent user, and discards the token.
 
 An enrollment token is never accepted over an unverified TLS connection, and the agent refuses to enroll if the server certificate cannot be validated.
 
@@ -362,7 +367,7 @@ Route templating (for example `/users/:id`) uses a bounded rule set and a fallba
 - The parser runs in the `ebpf` process, which has no network egress and cannot write outside its state directory. It hands only schema-validated records to the supervisor over a Unix socket.
 - The supervisor refuses any record that does not match the allowed schema for its class.
 - Policy entries that enable TLS inspection or full DNS names are logged to the control-plane audit trail with the actor, scope and time.
-- A host-local switch (`forgeops-agentctl disable tls-inspection`) can turn inspection off immediately, independent of the control plane.
+- A host-local switch (`uptimefoundry-agentctl disable tls-inspection`) can turn inspection off immediately, independent of the control plane.
 
 ### 8.4 Untrusted content and AI analysis
 
@@ -391,7 +396,7 @@ effective = local_policy  INTERSECT  remote_policy
 - A remote setting that asks for something the local policy does not allow is ignored and reported in the next heartbeat as `policy_conflict`.
 - If the remote policy is unavailable, the agent runs on the last accepted remote policy, or on a safe default (discovery only) if none exists.
 - Setting a boolean or list to a value absent from the ceiling is not an error that stops the agent; it is a reported conflict.
-- The local policy file is `/etc/forgeops-agent/policy.yaml`, mode `0640`, owner `root`, group `forgeops-agent`. The agent cannot modify it.
+- The local policy file is `/etc/uptimefoundry-agent/policy.yaml`, mode `0640`, owner `root`, group `uptimefoundry-agent`. The agent cannot modify it.
 
 ### 9.2 Local policy keys
 
@@ -407,7 +412,7 @@ effective = local_policy  INTERSECT  remote_policy
 | `tasks.allowed_types` | Permitted task types from the closed set | none |
 | `egress.endpoints` | Control-plane endpoints, with CA bundle or pins | required |
 | `limits.cpu_quota_percent`, `limits.memory_max_mb`, `limits.buffer_max_mb` | Hard resource ceilings | 5, 256, 512 |
-| `kill_switch.file` | Path whose presence disables non-discovery modules immediately | `/etc/forgeops-agent/disable` |
+| `kill_switch.file` | Path whose presence disables non-discovery modules immediately | `/etc/uptimefoundry-agent/disable` |
 
 ### 9.3 Example local policy
 
@@ -434,8 +439,8 @@ tasks:
   allowed_types: []
 egress:
   endpoints:
-    - address: forgeops.example.internal:8443
-      ca_file: /etc/forgeops-agent/pki/ca.pem
+    - address: uptimefoundry.example.internal:8443
+      ca_file: /etc/uptimefoundry-agent/pki/ca.pem
 limits:
   cpu_quota_percent: 5
   memory_max_mb: 256
@@ -476,7 +481,7 @@ The agent survives control-plane and network outages with a bounded on-disk writ
 
 ### 10.2 WAL rules
 
-- The WAL lives under `/var/lib/forgeops-agent/wal/`, split into fixed-size segments (default 16 MiB) with a checksum per record.
+- The WAL lives under `/var/lib/uptimefoundry-agent/wal/`, split into fixed-size segments (default 16 MiB) with a checksum per record.
 - Total size is capped by `limits.buffer_max_mb` (default 512). A separate free-space floor (default 10 percent of the filesystem) stops writing before the agent can fill the disk.
 - Segments are deleted once the server acknowledges every sequence in them. A maximum age (default 24 hours, per class) applies even if unacknowledged.
 - On crash recovery the agent replays unacknowledged segments, relying on server-side deduplication by sequence number.
@@ -502,7 +507,7 @@ Raw events are aggregated on the host. The system does not transmit per-request 
 4. At 100 percent, only high-priority classes are written and flow data is reduced to periodic full snapshots.
 5. When the server returns, the agent drains oldest-first within a rate limit, so a mass reconnect does not overload the control plane.
 
-Every drop is recorded in `forgeops_agent_dropped_total{class,reason}` and summarised in the next heartbeat. The control plane marks any investigation window that overlaps a recorded loss as incomplete, rather than treating the gap as quiet.
+Every drop is recorded in `uptimefoundry_agent_dropped_total{class,reason}` and summarised in the next heartbeat. The control plane marks any investigation window that overlaps a recorded loss as incomplete, rather than treating the gap as quiet.
 
 ### 10.5 Offline mode
 
@@ -541,10 +546,10 @@ Recovery is deliberately slow: the agent returns to a higher state only after 10
 
 | Level | Mechanism | Effect |
 | --- | --- | --- |
-| Per probe | Policy entry or `forgeops-agentctl probe disable <name>` | Detaches that probe |
+| Per probe | Policy entry or `uptimefoundry-agentctl probe disable <name>` | Detaches that probe |
 | Per module | Policy or control-plane command within the ceiling | Stops the module |
 | Whole agent, non-discovery | Presence of the kill-switch file | Detaches all eBPF and optional modules within 5 seconds |
-| Whole agent | `systemctl stop forgeops-agent` | Full stop; BPF programs are detached on process exit |
+| Whole agent | `systemctl stop uptimefoundry-agent` | Full stop; BPF programs are detached on process exit |
 
 All eBPF programs are loaded without pinning by default, so they disappear when the owning process exits. Pinning to `/sys/fs/bpf` is an optional mode with a startup check that removes stale pins.
 
@@ -558,7 +563,7 @@ All eBPF programs are loaded without pinning by default, so they disappear when 
 
 ### 11.5 Ring buffer and event loss
 
-Ring-buffer drops are counted in-kernel where supported and reported as `forgeops_agent_ebpf_dropped_events_total{probe}`. A sustained drop rate above 1 percent for 60 seconds triggers shedding step 2 or 3 automatically. Loss counters are always included in the heartbeat so the control plane can mark affected evidence as incomplete.
+Ring-buffer drops are counted in-kernel where supported and reported as `uptimefoundry_agent_ebpf_dropped_events_total{probe}`. A sustained drop rate above 1 percent for 60 seconds triggers shedding step 2 or 3 automatically. Loss counters are always included in the heartbeat so the control plane can mark affected evidence as incomplete.
 
 ## 12. Kubernetes, OpenShift and Swarm specifics
 
@@ -614,23 +619,23 @@ Pod and node names are attributes of a workload. Workload identity uses owner re
 
 | Path | Content |
 | --- | --- |
-| `/usr/bin/forgeops-agent` | Supervisor |
-| `/usr/libexec/forgeops-agent/` | `discovery`, `ebpf` and (separate package) `actuator` helpers; embedded BPF objects with hash verification |
-| `/etc/forgeops-agent/policy.yaml` | Local policy ceiling, root-owned |
-| `/etc/forgeops-agent/pki/` | CA bundle and optional pins |
-| `/var/lib/forgeops-agent/` | Identity, WAL and state, owned by the agent user |
-| `/usr/lib/systemd/system/forgeops-agent.service` | Supervisor unit |
+| `/usr/bin/uptimefoundry-agent` | Supervisor |
+| `/usr/libexec/uptimefoundry-agent/` | `discovery`, `ebpf` and (separate package) `actuator` helpers; embedded BPF objects with hash verification |
+| `/etc/uptimefoundry-agent/policy.yaml` | Local policy ceiling, root-owned |
+| `/etc/uptimefoundry-agent/pki/` | CA bundle and optional pins |
+| `/var/lib/uptimefoundry-agent/` | Identity, WAL and state, owned by the agent user |
+| `/usr/lib/systemd/system/uptimefoundry-agent.service` | Supervisor unit |
 
-The `actuator` ships as its own RPM (`forgeops-agent-actuator`) with its own unit, disabled by default, so a host that does not install it has no remediation code on disk.
+The `actuator` ships as its own RPM (`uptimefoundry-agent-actuator`) with its own unit, disabled by default, so a host that does not install it has no remediation code on disk.
 
 ### 13.2 systemd hardening
 
 The unit for each process sets the following where compatible with its function:
 
-- `User=forgeops-agent`, `NoNewPrivileges=yes`, `ProtectSystem=strict`, `ProtectHome=yes`, `PrivateTmp=yes`, `ProtectKernelModules=yes`, `ProtectControlGroups=read-only` where a function allows it.
+- `User=uptimefoundry-agent`, `NoNewPrivileges=yes`, `ProtectSystem=strict`, `ProtectHome=yes`, `PrivateTmp=yes`, `ProtectKernelModules=yes`, `ProtectControlGroups=read-only` where a function allows it.
 - `CapabilityBoundingSet` and `AmbientCapabilities` set to the per-process list in section 3.2 and nothing else.
 - `SystemCallFilter` allowlist per process, with `SystemCallArchitectures=native`.
-- `ReadWritePaths=/var/lib/forgeops-agent`, `RestrictAddressFamilies` (the `ebpf` process gets only `AF_UNIX` and `AF_NETLINK`; only the supervisor gets `AF_INET` and `AF_INET6`).
+- `ReadWritePaths=/var/lib/uptimefoundry-agent`, `RestrictAddressFamilies` (the `ebpf` process gets only `AF_UNIX` and `AF_NETLINK`; only the supervisor gets `AF_INET` and `AF_INET6`).
 - `MemoryDenyWriteExecute=yes`, `LockPersonality=yes`, `RestrictNamespaces=yes` for the parts that do not load BPF programs. BPF loading requires verification that these options do not block it on each supported kernel.
 - `CPUQuota`, `MemoryHigh` and `MemoryMax` from section 11.
 
@@ -638,7 +643,7 @@ The unit for each process sets the following where compatible with its function:
 
 RHEL runs SELinux in enforcing mode, so the agent ships a policy module rather than relying on `unconfined_service_t`.
 
-- Separate domains: `forgeops_agent_t` (supervisor), `forgeops_agent_discovery_t` and `forgeops_agent_ebpf_t`, with `forgeops_agent_actuator_t` in its own package.
+- Separate domains: `uptimefoundry_agent_t` (supervisor), `uptimefoundry_agent_discovery_t` and `uptimefoundry_agent_ebpf_t`, with `uptimefoundry_agent_actuator_t` in its own package.
 - The `ebpf` domain is allowed `bpf`, `perfmon` and the specific `/proc` reads it needs; it is denied network socket creation.
 - The supervisor domain is the only one allowed outbound TCP to the control-plane port type.
 - File contexts are defined for the state, WAL and identity directories.
@@ -671,9 +676,9 @@ The agent must be diagnosable without access to the observability stack it feeds
 
 ### 14.1 Local interfaces
 
-- `forgeops-agentctl status` reports tier, probe states, policy version, last control-plane contact, buffer depth and drop counters over the supervisor's Unix socket. Access requires membership in the `forgeops-agent` group or root.
-- `forgeops-agentctl policy show` prints the effective policy and any conflicts between local and remote settings.
-- `forgeops-agentctl diagnostics` creates the bundle described below.
+- `uptimefoundry-agentctl status` reports tier, probe states, policy version, last control-plane contact, buffer depth and drop counters over the supervisor's Unix socket. Access requires membership in the `uptimefoundry-agent` group or root.
+- `uptimefoundry-agentctl policy show` prints the effective policy and any conflicts between local and remote settings.
+- `uptimefoundry-agentctl diagnostics` creates the bundle described below.
 - No TCP port is opened for health or metrics by default. A Prometheus-format endpoint on a Unix socket or loopback can be enabled by local policy for sites that scrape agents.
 
 ### 14.2 Agent metrics
@@ -682,17 +687,17 @@ All metrics use bounded labels. Probe, class and reason values come from fixed e
 
 | Metric | Labels | Meaning |
 | --- | --- | --- |
-| `forgeops_agent_tier` | none | Current degradation tier (1 to 4) |
-| `forgeops_agent_probe_state` | `probe`, `state` | Probe status per the capability report |
-| `forgeops_agent_dropped_total` | `class`, `reason` | Records dropped before delivery |
-| `forgeops_agent_ebpf_dropped_events_total` | `probe` | Kernel ring-buffer losses |
-| `forgeops_agent_wal_bytes` | none | Current WAL size |
-| `forgeops_agent_unacked_messages` | `class` | Messages awaiting acknowledgement |
-| `forgeops_agent_stream_connected` | none | 1 when the control-plane stream is up |
-| `forgeops_agent_cert_expiry_seconds` | none | Time until certificate expiry |
-| `forgeops_agent_process_cpu_seconds_total`, `forgeops_agent_process_resident_bytes` | `process` | Per-process resource use |
-| `forgeops_agent_shed_level` | none | Current watchdog shedding step (0 to 5) |
-| `forgeops_agent_policy_conflicts` | none | Count of remote settings rejected by the ceiling |
+| `uptimefoundry_agent_tier` | none | Current degradation tier (1 to 4) |
+| `uptimefoundry_agent_probe_state` | `probe`, `state` | Probe status per the capability report |
+| `uptimefoundry_agent_dropped_total` | `class`, `reason` | Records dropped before delivery |
+| `uptimefoundry_agent_ebpf_dropped_events_total` | `probe` | Kernel ring-buffer losses |
+| `uptimefoundry_agent_wal_bytes` | none | Current WAL size |
+| `uptimefoundry_agent_unacked_messages` | `class` | Messages awaiting acknowledgement |
+| `uptimefoundry_agent_stream_connected` | none | 1 when the control-plane stream is up |
+| `uptimefoundry_agent_cert_expiry_seconds` | none | Time until certificate expiry |
+| `uptimefoundry_agent_process_cpu_seconds_total`, `uptimefoundry_agent_process_resident_bytes` | `process` | Per-process resource use |
+| `uptimefoundry_agent_shed_level` | none | Current watchdog shedding step (0 to 5) |
+| `uptimefoundry_agent_policy_conflicts` | none | Count of remote settings rejected by the ceiling |
 
 The same values are included in the heartbeat, so the control plane has them even when no scraper reaches the host.
 
@@ -771,7 +776,7 @@ The agent is delivered in five steps that map onto platform milestones M2 to M9.
 
 | Step | Deliverables | Exit criteria (section 15.3 numbers) |
 | --- | --- | --- |
-| A1 Foundation | Supervisor and process split, enrollment, mTLS stream, renewal and revocation, heartbeat, capability report, unprivileged host discovery, WAL buffering, `forgeops-agentctl status` | 1, 10 and 11 pass; a 30-minute outage loses no data inside the WAL cap (6) |
+| A1 Foundation | Supervisor and process split, enrollment, mTLS stream, renewal and revocation, heartbeat, capability report, unprivileged host discovery, WAL buffering, `uptimefoundry-agentctl status` | 1, 10 and 11 pass; a 30-minute outage loses no data inside the WAL cap (6) |
 | A2 OBI | Supervised upstream OBI for RED metrics on opted-in processes, redaction pipeline, SQL normalization, route templating, fuzzing of every parser | 7 and 9 pass; cardinality caps hold under the benchmark profile |
 | A3 Topology | Flow table with delta sync, Service and Swarm VIP resolution, cgroup v1 and v2 mapping, DNS observation, edge TTLs | 2 and 5 pass; flow edges in Kubernetes and Swarm tests target workloads, not virtual IPs |
 | A4 Hardening | SELinux policy module, systemd hardening, DaemonSet and OpenShift SCC, full degradation ladder, watchdog and shedding, signed RPMs, SBOM | 3, 4, 11 and 12 pass on every platform in the kernel matrix |
@@ -794,7 +799,7 @@ A1 is the first vertical slice and should be built alongside platform M2, so the
 | Section 23 and 9.5, two CPU figures | Replace with the tested budgets in section 11 |
 | Section 26, latency and similarity criteria | Replace with measured service-level targets and retrieval quality metrics (Recall@K, MRR) on a labelled set |
 | Ports | Resolve the clash between MCP SSE and the embedding endpoint (both 8081) and the control plane (8080) with one documented port plan |
-| Binary and endpoint names | Standardize `forgeops-server` or `forgeops`, `forgeops-cli` or `forgeopsctl`, and `/health/*` or `/healthz` across all documents |
+| Binary and endpoint names | Standardize `uptimefoundry-server` or `uptimefoundry`, `uptimefoundry-cli` or `uptimefoundryctl`, and `/health/*` or `/healthz` across all documents |
 | Section 20, "cryptographic authorization" | Define signing keys, key holders, signed content and verification for tasks, policy and remediation approval |
 | v1.1 safeguards | Restore TLS-required remote endpoints, no insecure TLS by default, SSRF protection, partial-result handling, retention awareness and provider failure isolation |
 | Graph store | Consider recursive queries on the relational `relationships` table for the first release and add Apache AGE only if multi-hop performance requires it |

@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/forgeops/forgeops/internal/agent/policy"
+	"github.com/onisimchukv/uptimefoundry/internal/agent/policy"
 )
 
 func TestOBIProcessOptIn(t *testing.T) {

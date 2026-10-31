@@ -9,9 +9,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/forgeops/forgeops/internal/agent/protocol"
-	"github.com/forgeops/forgeops/internal/core/models"
-	"github.com/forgeops/forgeops/internal/core/ports"
+	"github.com/onisimchukv/uptimefoundry/internal/agent/protocol"
+	"github.com/onisimchukv/uptimefoundry/internal/core/models"
+	"github.com/onisimchukv/uptimefoundry/internal/core/ports"
 )
 
 // ActiveAgent tracks a live agent connection on the control plane.

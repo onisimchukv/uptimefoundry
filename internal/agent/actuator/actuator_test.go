@@ -21,7 +21,7 @@ func TestHMACVerifier_ValidSignature(t *testing.T) {
 		TaskID:     "task-001",
 		ActionType: "restart_service",
 		Target:     "nginx.service",
-		ApprovedBy: "operator@forgeops.io",
+		ApprovedBy: "operator@example.com",
 		IssuedAt:   time.Now().Add(-10 * time.Second),
 		ExpiresAt:  time.Now().Add(5 * time.Minute),
 		DryRun:     false,
@@ -40,7 +40,7 @@ func TestHMACVerifier_TamperedPayload(t *testing.T) {
 		TaskID:     "task-002",
 		ActionType: "restart_service",
 		Target:     "nginx.service",
-		ApprovedBy: "operator@forgeops.io",
+		ApprovedBy: "operator@example.com",
 		IssuedAt:   time.Now().Add(-10 * time.Second),
 		ExpiresAt:  time.Now().Add(5 * time.Minute),
 	}
@@ -67,7 +67,7 @@ func TestHMACVerifier_WrongKey(t *testing.T) {
 		TaskID:     "task-003",
 		ActionType: "restart_service",
 		Target:     "nginx.service",
-		ApprovedBy: "operator@forgeops.io",
+		ApprovedBy: "operator@example.com",
 		IssuedAt:   time.Now(),
 		ExpiresAt:  time.Now().Add(5 * time.Minute),
 	}
@@ -85,7 +85,7 @@ func TestHMACVerifier_ExpiredTask(t *testing.T) {
 		TaskID:     "task-004",
 		ActionType: "restart_service",
 		Target:     "nginx.service",
-		ApprovedBy: "operator@forgeops.io",
+		ApprovedBy: "operator@example.com",
 		IssuedAt:   time.Now().Add(-10 * time.Minute),
 		ExpiresAt:  time.Now().Add(-1 * time.Minute), // already expired
 	}
@@ -103,7 +103,7 @@ func TestHMACVerifier_FutureTimestamp(t *testing.T) {
 		TaskID:     "task-005",
 		ActionType: "restart_service",
 		Target:     "nginx.service",
-		ApprovedBy: "operator@forgeops.io",
+		ApprovedBy: "operator@example.com",
 		IssuedAt:   time.Now().Add(5 * time.Minute), // far future
 		ExpiresAt:  time.Now().Add(10 * time.Minute),
 	}
@@ -127,7 +127,7 @@ func TestEd25519Verifier_ValidSignature(t *testing.T) {
 		TaskID:     "task-ed25519-001",
 		ActionType: "restart_container",
 		Target:     "payment-api-7f8b9c",
-		ApprovedBy: "sre-lead@forgeops.io",
+		ApprovedBy: "sre-lead@example.com",
 		IssuedAt:   time.Now().Add(-5 * time.Second),
 		ExpiresAt:  time.Now().Add(5 * time.Minute),
 		DryRun:     true,
@@ -147,7 +147,7 @@ func TestEd25519Verifier_TamperedPayload(t *testing.T) {
 		TaskID:     "task-ed25519-002",
 		ActionType: "restart_container",
 		Target:     "payment-api-7f8b9c",
-		ApprovedBy: "sre-lead@forgeops.io",
+		ApprovedBy: "sre-lead@example.com",
 		IssuedAt:   time.Now(),
 		ExpiresAt:  time.Now().Add(5 * time.Minute),
 	}
@@ -331,7 +331,7 @@ func TestActuator_FullPipeline_ValidTask(t *testing.T) {
 		TaskID:     "pipe-001",
 		ActionType: "restart_service",
 		Target:     "nginx.service",
-		ApprovedBy: "sre@forgeops.io",
+		ApprovedBy: "sre@example.com",
 		IssuedAt:   time.Now().Add(-5 * time.Second),
 		ExpiresAt:  time.Now().Add(5 * time.Minute),
 		DryRun:     false,
@@ -384,7 +384,7 @@ func TestActuator_FullPipeline_DryRun(t *testing.T) {
 		TaskID:     "pipe-dr-001",
 		ActionType: "restart_service",
 		Target:     "nginx.service",
-		ApprovedBy: "sre@forgeops.io",
+		ApprovedBy: "sre@example.com",
 		IssuedAt:   time.Now().Add(-5 * time.Second),
 		ExpiresAt:  time.Now().Add(5 * time.Minute),
 		DryRun:     true,
@@ -428,7 +428,7 @@ func TestActuator_FullPipeline_PolicyDenial(t *testing.T) {
 		TaskID:     "pipe-deny-001",
 		ActionType: "delete_host",
 		Target:     "prod-server-01",
-		ApprovedBy: "rogue@forgeops.io",
+		ApprovedBy: "rogue@example.com",
 		IssuedAt:   time.Now().Add(-5 * time.Second),
 		ExpiresAt:  time.Now().Add(5 * time.Minute),
 	}
@@ -512,7 +512,7 @@ func TestActuator_DryRunDefault_OverridesLiveTask(t *testing.T) {
 		TaskID:     "pipe-drd-001",
 		ActionType: "restart_service",
 		Target:     "nginx.service",
-		ApprovedBy: "sre@forgeops.io",
+		ApprovedBy: "sre@example.com",
 		IssuedAt:   time.Now(),
 		ExpiresAt:  time.Now().Add(5 * time.Minute),
 		DryRun:     false, // task says live execution

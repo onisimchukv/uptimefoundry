@@ -1,14 +1,14 @@
 [Unit]
-Description=ForgeOps Host Agent eBPF Worker
-Documentation=https://github.com/forgeops/forgeops
-BindsTo=forgeops-agent.service
-After=forgeops-agent.service
+Description=UptimeFoundry Host Agent eBPF Worker
+Documentation=https://github.com/onisimchukv/uptimefoundry
+BindsTo=uptimefoundry-agent.service
+After=uptimefoundry-agent.service
 
 [Service]
 Type=simple
-User=forgeops-agent-ebpf
-Group=forgeops-agent
-ExecStart=/usr/libexec/forgeops-agent/forgeops-agent-ebpf
+User=uptimefoundry-agent-ebpf
+Group=uptimefoundry-agent
+ExecStart=/usr/libexec/uptimefoundry-agent/uptimefoundry-agent-ebpf
 Restart=on-failure
 RestartSec=5s
 
@@ -33,8 +33,8 @@ RestrictAddressFamilies=AF_UNIX AF_NETLINK
 SystemCallArchitectures=native
 
 # Filesystem Access
-ReadWritePaths=/run/forgeops-agent
-ReadOnlyPaths=/proc /sys /etc/forgeops-agent
+ReadWritePaths=/run/uptimefoundry-agent
+ReadOnlyPaths=/proc /sys /etc/uptimefoundry-agent
 
 # Resource Budgets (Section 11.1)
 CPUQuota=10%
@@ -42,4 +42,4 @@ MemoryHigh=300M
 MemoryMax=384M
 
 [Install]
-WantedBy=forgeops-agent.service
+WantedBy=uptimefoundry-agent.service

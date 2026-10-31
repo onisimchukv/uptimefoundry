@@ -65,7 +65,7 @@ type ResourceLimits struct {
 }
 
 type KillSwitchRule struct {
-	File string `yaml:"file" json:"file"` // default /etc/forgeops-agent/disable
+	File string `yaml:"file" json:"file"` // default /etc/uptimefoundry-agent/disable
 }
 
 // RemotePolicy contains the operational configuration pushed by the control plane.
@@ -121,7 +121,7 @@ func DefaultLocalPolicy() *LocalPolicy {
 			BufferMaxMB:     512,
 		},
 		KillSwitch: KillSwitchRule{
-			File: "/etc/forgeops-agent/disable",
+			File: "/etc/uptimefoundry-agent/disable",
 		},
 	}
 }

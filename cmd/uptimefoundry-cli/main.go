@@ -12,9 +12,9 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/forgeops/forgeops/internal/core/models"
-	"github.com/forgeops/forgeops/internal/graph/traverser"
-	"github.com/forgeops/forgeops/internal/telemetry"
+	"github.com/onisimchukv/uptimefoundry/internal/core/models"
+	"github.com/onisimchukv/uptimefoundry/internal/graph/traverser"
+	"github.com/onisimchukv/uptimefoundry/internal/telemetry"
 )
 
 var (
@@ -23,7 +23,7 @@ var (
 )
 
 func main() {
-	serverURL := flag.String("server", "http://localhost:8080", "ForgeOps Control Plane API URL")
+	serverURL := flag.String("server", "http://localhost:8080", "UptimeFoundry Control Plane API URL")
 	flag.Usage = printUsage
 	flag.Parse()
 
@@ -36,14 +36,14 @@ func main() {
 	command := args[0]
 	switch command {
 	case "version":
-		fmt.Printf("ForgeOps CLI %s\n", cliVersion)
+		fmt.Printf("UptimeFoundry CLI %s\n", cliVersion)
 
 	case "status":
 		handleStatus(*serverURL)
 
 	case "discovery":
 		if len(args) < 2 {
-			fmt.Println("Usage: forgeops-cli discovery [run|list]")
+			fmt.Println("Usage: uptimefoundry-cli discovery [run|list]")
 			os.Exit(1)
 		}
 		switch args[1] {
@@ -61,7 +61,7 @@ func main() {
 
 	case "resources":
 		if len(args) < 2 || args[1] != "list" {
-			fmt.Println("Usage: forgeops-cli resources list [kind]")
+			fmt.Println("Usage: uptimefoundry-cli resources list [kind]")
 			os.Exit(1)
 		}
 		kind := ""
@@ -72,7 +72,7 @@ func main() {
 
 	case "topology":
 		if len(args) < 3 {
-			fmt.Println("Usage: forgeops-cli topology [get|blast-radius] <resource_id> [hops]")
+			fmt.Println("Usage: uptimefoundry-cli topology [get|blast-radius] <resource_id> [hops]")
 			os.Exit(1)
 		}
 		action := args[1]
@@ -93,21 +93,21 @@ func main() {
 
 	case "metrics":
 		if len(args) < 3 || args[1] != "query" {
-			fmt.Println("Usage: forgeops-cli metrics query <promql_expression>")
+			fmt.Println("Usage: uptimefoundry-cli metrics query <promql_expression>")
 			os.Exit(1)
 		}
 		handleMetricsQuery(*serverURL, args[2])
 
 	case "logs":
 		if len(args) < 3 || args[1] != "query" {
-			fmt.Println("Usage: forgeops-cli logs query <logql_expression>")
+			fmt.Println("Usage: uptimefoundry-cli logs query <logql_expression>")
 			os.Exit(1)
 		}
 		handleLogsQuery(*serverURL, args[2])
 
 	case "incidents":
 		if len(args) < 2 {
-			fmt.Println("Usage: forgeops-cli incidents [list|create <title> <severity> [primary_resource_id]]")
+			fmt.Println("Usage: uptimefoundry-cli incidents [list|create <title> <severity> [primary_resource_id]]")
 			os.Exit(1)
 		}
 		switch args[1] {
@@ -115,7 +115,7 @@ func main() {
 			handleIncidentsList(*serverURL)
 		case "create":
 			if len(args) < 4 {
-				fmt.Println("Usage: forgeops-cli incidents create <title> <severity> [primary_resource_id]")
+				fmt.Println("Usage: uptimefoundry-cli incidents create <title> <severity> [primary_resource_id]")
 				os.Exit(1)
 			}
 			title := args[2]
@@ -131,21 +131,21 @@ func main() {
 
 	case "investigate":
 		if len(args) < 2 {
-			fmt.Println("Usage: forgeops-cli investigate <incident_id>")
+			fmt.Println("Usage: uptimefoundry-cli investigate <incident_id>")
 			os.Exit(1)
 		}
 		handleInvestigate(*serverURL, args[1])
 
 	case "knowledge":
 		if len(args) < 3 || args[1] != "search" {
-			fmt.Println("Usage: forgeops-cli knowledge search <query>")
+			fmt.Println("Usage: uptimefoundry-cli knowledge search <query>")
 			os.Exit(1)
 		}
 		handleKnowledgeSearch(*serverURL, args[2])
 
 	case "remediations":
 		if len(args) < 3 || args[1] != "approve" {
-			fmt.Println("Usage: forgeops-cli remediations approve <remediation_id> [approver]")
+			fmt.Println("Usage: uptimefoundry-cli remediations approve <remediation_id> [approver]")
 			os.Exit(1)
 		}
 		approver := "operator"
@@ -162,10 +162,10 @@ func main() {
 }
 
 func printUsage() {
-	fmt.Print(`ForgeOps CLI - Sovereign SRE & Operations Management
+	fmt.Print(`UptimeFoundry CLI - Sovereign SRE & Operations Management
 
 Usage:
-  forgeops-cli [flags] <command> [subcommand] [arguments...]
+  uptimefoundry-cli [flags] <command> [subcommand] [arguments...]
 
 Flags:
   -server string   Control plane endpoint (default: http://localhost:8080)
@@ -263,7 +263,7 @@ func handleResourcesList(serverURL, kind string) {
 	_ = json.NewDecoder(resp.Body).Decode(&resources)
 
 	if len(resources) == 0 {
-		fmt.Println("No resources discovered yet. Run `forgeops-cli discovery run` to scan.")
+		fmt.Println("No resources discovered yet. Run `uptimefoundry-cli discovery run` to scan.")
 		return
 	}
 

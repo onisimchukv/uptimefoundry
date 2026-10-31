@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 package main
 
 import (
@@ -8,8 +9,11 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type Component struct {
@@ -43,6 +47,11 @@ type Tool struct {
 }
 
 func main() {
+	releaseVersion := os.Getenv("UPTIMEFOUNDRY_VERSION")
+	if releaseVersion == "" {
+		releaseVersion = "0.0.0-dev"
+	}
+
 	cmd := exec.Command("go", "list", "-m", "-json", "all")
 	out, err := cmd.Output()
 	if err != nil {
@@ -78,26 +87,34 @@ func main() {
 		})
 	}
 
-	// Compute hashes for binaries if present in bin/
-	binFiles := []string{
-		"bin/forgeops-agent", "bin/forgeops-agentctl",
-		"bin/forgeops", "bin/forgeops-cli",
-		"bin/forgeops-agent.exe", "bin/forgeops-agentctl.exe",
-		"bin/forgeops.exe", "bin/forgeops-cli.exe",
+	// Include release binaries in the SBOM with their content hashes.
+	binFiles, err := filepath.Glob("dist/uptimefoundry_*")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to find release binaries: %v\n", err)
+		os.Exit(1)
 	}
-
 	for _, binPath := range binFiles {
 		if f, err := os.Open(binPath); err == nil {
 			h := sha256.New()
-			_, _ = io.Copy(h, f)
-			f.Close()
+			if _, err := io.Copy(h, f); err != nil {
+				_ = f.Close()
+				fmt.Fprintf(os.Stderr, "failed to hash %s: %v\n", binPath, err)
+				os.Exit(1)
+			}
+			if err := f.Close(); err != nil {
+				fmt.Fprintf(os.Stderr, "failed to close %s: %v\n", binPath, err)
+				os.Exit(1)
+			}
 			hashHex := hex.EncodeToString(h.Sum(nil))
 			components = append(components, Component{
 				Type:    "application",
-				Name:    binPath,
-				Version: "1.3.0",
+				Name:    filepath.Base(binPath),
+				Version: releaseVersion,
 				SHA256:  hashHex,
 			})
+		} else {
+			fmt.Fprintf(os.Stderr, "failed to open %s: %v\n", binPath, err)
+			os.Exit(1)
 		}
 	}
 
@@ -105,20 +122,20 @@ func main() {
 	sbom := SBOM{
 		BOMFormat:    "CycloneDX",
 		SpecVersion:  "1.5",
-		SerialNumber: fmt.Sprintf("urn:uuid:forgeops-sbom-%d", time.Now().Unix()),
+		SerialNumber: fmt.Sprintf("urn:uuid:%s", uuid.NewString()),
 		Version:      1,
 		Timestamp:    now,
 		Metadata: Metadata{
 			Timestamp: now,
 			Tool: Tool{
-				Vendor:  "ForgeOps",
-				Name:    "forgeops-sbom-generator",
-				Version: "1.3.0",
+				Vendor:  "UptimeFoundry",
+				Name:    "uptimefoundry-sbom-generator",
+				Version: releaseVersion,
 			},
 			Component: Component{
 				Type:    "application",
-				Name:    "github.com/forgeops/forgeops",
-				Version: "1.3.0",
+				Name:    "github.com/onisimchukv/uptimefoundry",
+				Version: releaseVersion,
 			},
 		},
 		Components: components,

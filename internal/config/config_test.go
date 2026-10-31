@@ -8,8 +8,8 @@ import (
 func TestDefaultConfig(t *testing.T) {
 	cfg := DefaultConfig()
 
-	if cfg.Server.ListenAddress != "0.0.0.0:8080" {
-		t.Fatalf("expected listen address 0.0.0.0:8080, got %s", cfg.Server.ListenAddress)
+	if cfg.Server.ListenAddress != "127.0.0.1:8080" {
+		t.Fatalf("expected listen address 127.0.0.1:8080, got %s", cfg.Server.ListenAddress)
 	}
 
 	if !cfg.Database.Extensions.AGE.Enabled {

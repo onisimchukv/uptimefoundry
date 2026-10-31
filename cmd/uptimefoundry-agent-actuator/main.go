@@ -1,7 +1,7 @@
-// ForgeOps Agent Actuator — Separate Binary for Remediation Execution
+// UptimeFoundry Agent Actuator — Separate Binary for Remediation Execution
 //
 // This is intentionally a distinct binary and package from the main agent supervisor.
-// The actuator ships as its own RPM (forgeops-agent-actuator) with its own systemd
+// The actuator ships as its own RPM (uptimefoundry-agent-actuator) with its own systemd
 // unit, disabled by default, so a host that does not install it has zero remediation
 // code on disk.
 //
@@ -27,19 +27,19 @@ func main() {
 	}))
 	slog.SetDefault(logger)
 
-	stateDir := os.Getenv("FORGEOPS_ACTUATOR_STATE_DIR")
+	stateDir := os.Getenv("UPTIMEFOUNDRY_ACTUATOR_STATE_DIR")
 	if stateDir == "" {
-		stateDir = "/var/lib/forgeops-agent/actuator"
+		stateDir = "/var/lib/uptimefoundry-agent/actuator"
 	}
 
-	socketPath := os.Getenv("FORGEOPS_ACTUATOR_SOCKET")
+	socketPath := os.Getenv("UPTIMEFOUNDRY_ACTUATOR_SOCKET")
 	if socketPath == "" {
 		socketPath = filepath.Join(stateDir, "actuator.sock")
 	}
 
 	_ = os.MkdirAll(stateDir, 0700)
 
-	logger.Info("forgeops-agent-actuator starting",
+	logger.Info("uptimefoundry-agent-actuator starting",
 		slog.String("state_dir", stateDir),
 		slog.String("socket", socketPath),
 		slog.String("version", "1.3.0"),
@@ -87,11 +87,11 @@ func main() {
 		}
 	}()
 
-	logger.Info("forgeops-agent-actuator ready (Unix socket only; no TCP listeners)")
+	logger.Info("uptimefoundry-agent-actuator ready (Unix socket only; no TCP listeners)")
 
 	<-ctx.Done()
 	logger.Info("shutting down actuator")
 	_ = server.Shutdown(context.Background())
 	_ = os.Remove(socketPath)
-	fmt.Println("forgeops-agent-actuator stopped")
+	fmt.Println("uptimefoundry-agent-actuator stopped")
 }

@@ -1,3 +1,8 @@
+<!-- SPDX-License-Identifier: MIT -->
+# Status: Superseded
+
+This specification is retained as historical design context and is superseded by [agent-v1.3](agent-v1.3.md) for agent behavior and security boundaries. The agent-to-control-plane data path, per-process capabilities, and debugfs mount claims have been corrected from Section 17.1. Other Section 17.1 platform corrections remain open; this is not current implementation guidance.
+
 # ForgeOps — Technical Specification v1.2
 
 **Project:** ForgeOps  
@@ -407,7 +412,7 @@ In Apache AGE, resources are represented as **Vertices** labeled by their `Resou
 Discovery combines three synchronized ingestion methods:
 1. **Periodic API Discovery:** Queries Kubernetes API servers, Docker daemons, and Linux OS APIs (`/proc`, `/sys`, `systemd`) on a scheduled interval (default: 5m).
 2. **Real-Time Streaming Informers:** Watches Kubernetes event streams (`Pods`, `Nodes`, `Events`) for sub-second topology updates.
-3. **Continuous eBPF Socket Discovery:** The `forgeops-agent` streams real-time TCP socket connection tuples (`src_ip:src_port` $\rightarrow$ `dst_ip:dst_port`) directly into the graph engine, creating dynamic `CONNECTS_TO` edges.
+3. **Continuous eBPF Socket Discovery:** The agent sends real-time TCP socket connection tuples (`src_ip:src_port` $\rightarrow$ `dst_ip:dst_port`) to the control-plane ingestion API over its authenticated channel. The control plane validates and persists topology updates; agents never write directly to PostgreSQL.
 
 ## 7.2 Linux Host Discovery
 
@@ -454,14 +459,16 @@ sequenceDiagram
     participant App as Target App (User Space)
     participant Kernel as Linux Kernel (eBPF Probes)
     participant Agent as forgeops-agent (OBI Engine)
+    participant CP as Control Plane Ingestion API
     participant PG as PostgreSQL (Apache AGE)
     participant VM as VictoriaMetrics
 
     App->>Kernel: tcp_v4_connect() / sys_enter_write() / TLS call
     Kernel->>Agent: eBPF Ring Buffer (Socket metadata, HTTP payload, latency)
     Agent->>Agent: Protocol Parser (Extracts HTTP status, URL, gRPC method, SQL verb)
-    Agent->>PG: Upsert CONNECTS_TO Edge (Source -> Target, RTT, Protocol)
-    Agent->>VM: Stream OTLP Metrics (http_server_duration_milliseconds_bucket)
+    Agent->>CP: Send topology and telemetry over authenticated mTLS channel
+    CP->>PG: Validate and persist CONNECTS_TO edge
+    CP->>VM: Relay authorized OTLP metrics
 ```
 
 ## 9.2 Zero-Code Protocol Parsing & RED Metrics
@@ -983,7 +990,7 @@ flowchart LR
 # 20. Security Requirements
 
 * **Non-Root Execution:** Control plane and agent run as non-root systemd service users (`forgeops`).
-* **eBPF Kernel Capabilities:** The `forgeops-agent` requires only `CAP_BPF` and `CAP_NET_ADMIN` (on Linux 5.8+) rather than full root, utilizing systemd `AmbientCapabilities=CAP_BPF CAP_NET_ADMIN`.
+* **eBPF Kernel Capabilities:** Capabilities are assigned per process, not to the whole agent. The supervisor runs with no capabilities; the eBPF worker receives only the capabilities required by its enabled probes (including `CAP_BPF` and `CAP_PERFMON` where supported, and `CAP_NET_ADMIN` or `CAP_SYS_PTRACE` only where required). The discovery and actuator workers have separate privilege sets. Kernel-version exceptions and SELinux policy are defined in [agent-v1.3](agent-v1.3.md).
 * **Zero Credential Exposure in eBPF:** TLS uprobes discard memory buffers outside HTTP/gRPC/SQL headers and never record TLS master keys or authentication tokens.
 * **Immutable Audit Trail:** All API, CLI, and MCP tool invocations are logged to the `audit_events` table with actor identity, IP, and outcome.
 * **Human-in-the-Loop Remediation:** Remediation execution requires two-person rule approval or explicit token confirmation; autonomous remediation is disabled by default.
@@ -1010,7 +1017,7 @@ ForgeOps instruments itself using its own standards:
 ## 22.2 Kubernetes Deployment
 * Helm chart deploying:
   * `forgeops-control-plane` (Deployment, 2 replicas).
-  * `forgeops-agent` (DaemonSet with eBPF probes mounted to `/sys/kernel/debug` and `/sys/fs/bpf`).
+  * `forgeops-agent` (DaemonSet with only the read-only host paths and capabilities required by [agent-v1.3](agent-v1.3.md); do not mount `/sys/kernel/debug` by default).
 
 ---
 
@@ -1074,7 +1081,7 @@ ForgeOps instruments itself using its own standards:
 The release is certified production-ready when:
 1. It deploys cleanly as a non-root systemd service on RHEL 8 and RHEL 9.
 2. PostgreSQL 16 successfully executes hybrid relational, openCypher (Apache AGE), and vector (pgvector) queries.
-3. `forgeops-agent` attaches eBPF probes, capturing zero-code HTTP/gRPC/SQL RED metrics and generating live `CONNECTS_TO` edges with measured socket RTT.
+3. The agent attaches only policy-enabled eBPF probes and sends redacted telemetry and topology observations over its authenticated channel; the control plane validates observations and owns all PostgreSQL writes.
 4. Queries against VictoriaMetrics and Loki retrieve telemetry evidence within $<500\text{ms}$.
 5. GraphRAG accurately retrieves runbooks specific to the affected service's subgraph with cosine similarity $\ge 0.72$.
 6. External AI assistants (Claude, Cursor, Antigravity) successfully connect via MCP stdio/SSE to inspect topology and run queries.

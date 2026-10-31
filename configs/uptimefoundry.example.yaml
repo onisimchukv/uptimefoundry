@@ -1,0 +1,109 @@
+# UptimeFoundry Configuration Example
+#
+# NOTE: For production deployments, all endpoints must enforce TLS/mTLS,
+# credentials must be loaded via secrets/environment variables, and plain HTTP is disallowed.
+
+server:
+  # In production, bind to internal VPC or overlay network interface, not 0.0.0.0
+  listen_address: "127.0.0.1:8080" # Development default; use TLS for production
+  tls:
+    enabled: false # Set to true in production
+    cert_file: "/etc/uptimefoundry/pki/server.crt"
+    key_file: "/etc/uptimefoundry/pki/server.key"
+
+database:
+  # Copy this example to an ignored local config and provide a local-only DSN.
+  # Never commit credentials. sslmode=disable is only for the loopback dev stack.
+  dsn: ""
+  max_open_connections: 25
+  max_idle_connections: 5
+  conn_max_lifetime: 15m
+  extensions:
+    age:
+      enabled: true
+      graph_name: "opsfoundry_graph"
+    vector:
+      enabled: true
+      embedding_dimension: 768
+
+discovery:
+  interval: 5m
+  adapters:
+    host:
+      enabled: true
+    kubernetes:
+      enabled: true
+      in_cluster: false
+    docker_swarm:
+      enabled: false
+
+ebpf:
+  enabled: true
+  export_metrics: true
+  otlp_metrics_endpoint: "http://127.0.0.1:8428/opentelemetry/v1/metrics"
+  monitor_tls: false # Off by default per local policy ceiling; requires explicit host opt-in
+  capture_sql: false # Off by default; requires opt-in
+  ring_buffer_pages: 64
+
+telemetry:
+  metrics:
+    provider: victoriametrics
+    victoriametrics:
+      query_endpoint: "http://127.0.0.1:8428"
+      query_timeout: 15s
+      max_series: 2000
+    prometheus:
+      query_endpoint: "http://127.0.0.1:9090"
+      query_timeout: 15s
+  logs:
+    provider: loki
+    loki:
+      query_endpoint: "http://127.0.0.1:3100"
+      query_timeout: 15s
+  traces:
+    provider: otel
+    otel:
+      endpoint: "http://127.0.0.1:4317"
+
+rag:
+  enabled: true
+  embedding_provider: local_tei # "local_tei", "ollama", or "mock"
+  embedding_endpoint: "http://127.0.0.1:8081/embed"
+  top_k: 4
+  similarity_threshold: 0.72
+  sources:
+    - path: "runbooks"
+      type: "runbook"
+    - path: "postmortems"
+      type: "postmortem"
+
+mcp:
+  server:
+    enabled: true
+    transports:
+      stdio: false
+      sse:
+        enabled: true
+        port: 8082 # Distinct port from TEI embedding endpoint (8081)
+        auth_token_secret_ref: "uptimefoundry/mcp-token"
+  client:
+    enabled: false
+    servers:
+      - name: "github"
+        command: "npx"
+        args: ["-y", "@modelcontextprotocol/server-github"]
+        env:
+          GITHUB_PERSONAL_ACCESS_TOKEN_REF: "uptimefoundry/github-token"
+
+ai:
+  enabled: false # Set true when Ollama / vLLM local inference endpoint is running
+  provider: local_openai_compatible
+  endpoint: "http://127.0.0.1:11434/v1"
+  model: "qwen2.5-coder:14b"
+  request_timeout: 60s
+  max_context_tokens: 16384
+
+security:
+  remediation:
+    enabled: false
+    require_two_person_approval: true

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/forgeops/forgeops/internal/core/models"
+	"github.com/onisimchukv/uptimefoundry/internal/core/models"
 	"gopkg.in/yaml.v3"
 )
 

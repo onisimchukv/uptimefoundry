@@ -12,15 +12,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/forgeops/forgeops/internal/adapters"
-	"github.com/forgeops/forgeops/internal/adapters/host"
-	"github.com/forgeops/forgeops/internal/agent/capability"
-	"github.com/forgeops/forgeops/internal/agent/flows"
-	"github.com/forgeops/forgeops/internal/agent/identity"
-	"github.com/forgeops/forgeops/internal/agent/obi"
-	"github.com/forgeops/forgeops/internal/agent/policy"
-	"github.com/forgeops/forgeops/internal/agent/protocol"
-	"github.com/forgeops/forgeops/internal/agent/wal"
+	"github.com/onisimchukv/uptimefoundry/internal/adapters"
+	"github.com/onisimchukv/uptimefoundry/internal/adapters/host"
+	"github.com/onisimchukv/uptimefoundry/internal/agent/capability"
+	"github.com/onisimchukv/uptimefoundry/internal/agent/flows"
+	"github.com/onisimchukv/uptimefoundry/internal/agent/identity"
+	"github.com/onisimchukv/uptimefoundry/internal/agent/obi"
+	"github.com/onisimchukv/uptimefoundry/internal/agent/policy"
+	"github.com/onisimchukv/uptimefoundry/internal/agent/protocol"
+	"github.com/onisimchukv/uptimefoundry/internal/agent/wal"
 )
 
 // Config configures the supervisor daemon.
@@ -153,7 +153,7 @@ func (s *Supervisor) Start(ctx context.Context) error {
 		s.logger.Warn("agent un-enrolled and no bootstrap token provided; running in local inspection mode")
 	}
 
-	// 4. Start Local IPC Socket for forgeops-agentctl
+	// 4. Start Local IPC Socket for uptimefoundry-agentctl
 	if err := s.startIPC(); err != nil {
 		s.logger.Warn("failed to start local unix ipc socket; agentctl disabled", slog.Any("error", err))
 	}
@@ -350,7 +350,7 @@ func (s *Supervisor) flushFlowDelta() {
 	}
 }
 
-// Status returns a snapshot of agent state for forgeops-agentctl.
+// Status returns a snapshot of agent state for uptimefoundry-agentctl.
 func (s *Supervisor) Status() map[string]any {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

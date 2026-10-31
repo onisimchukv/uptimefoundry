@@ -53,8 +53,8 @@ func NewCA() (*CA, error) {
 	template := x509.Certificate{
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
-			CommonName:   "ForgeOps Control Plane Root CA",
-			Organization: []string{"ForgeOps"},
+			CommonName:   "UptimeFoundry Control Plane Root CA",
+			Organization: []string{"UptimeFoundry"},
 		},
 		NotBefore:             time.Now().Add(-10 * time.Minute),
 		NotAfter:              time.Now().Add(10 * 365 * 24 * time.Hour), // 10 years
@@ -187,7 +187,7 @@ func (ca *CA) signCSR(csrPEM []byte, agentID string, validity time.Duration) ([]
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
 			CommonName:   agentID, // Section 4.2: agent_id only in subject
-			Organization: []string{"ForgeOps Agent"},
+			Organization: []string{"UptimeFoundry Agent"},
 		},
 		NotBefore:   now.Add(-5 * time.Minute),
 		NotAfter:    expiresAt,

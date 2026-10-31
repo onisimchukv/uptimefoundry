@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/forgeops/forgeops/internal/agent/protocol"
+	"github.com/onisimchukv/uptimefoundry/internal/agent/protocol"
 )
 
 // Table manages thread-safe aggregation of network socket connections into workload-to-workload topology edges.

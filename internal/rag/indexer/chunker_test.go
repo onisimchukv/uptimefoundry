@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/forgeops/forgeops/internal/core/models"
-	"github.com/forgeops/forgeops/internal/rag/embeddings"
+	"github.com/onisimchukv/uptimefoundry/internal/core/models"
+	"github.com/onisimchukv/uptimefoundry/internal/rag/embeddings"
 )
 
 type mockKnowledgeRepo struct {

@@ -8,12 +8,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgeops/forgeops/internal/config"
-	"github.com/forgeops/forgeops/internal/core/models"
-	"github.com/forgeops/forgeops/internal/investigation/correlator"
-	"github.com/forgeops/forgeops/internal/rag/embeddings"
-	"github.com/forgeops/forgeops/internal/rag/graphrag"
-	"github.com/forgeops/forgeops/internal/telemetry"
+	"github.com/onisimchukv/uptimefoundry/internal/config"
+	"github.com/onisimchukv/uptimefoundry/internal/core/models"
+	"github.com/onisimchukv/uptimefoundry/internal/investigation/correlator"
+	"github.com/onisimchukv/uptimefoundry/internal/rag/embeddings"
+	"github.com/onisimchukv/uptimefoundry/internal/rag/graphrag"
+	"github.com/onisimchukv/uptimefoundry/internal/telemetry"
 )
 
 type mockResourceRepo struct{}

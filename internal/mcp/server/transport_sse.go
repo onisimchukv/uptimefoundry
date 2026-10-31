@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/forgeops/forgeops/internal/mcp/protocol"
+	"github.com/onisimchukv/uptimefoundry/internal/mcp/protocol"
 )
 
 // RunHTTP launches an HTTP listener exposing SSE (/sse) and JSON-RPC dispatch (/rpc or /message).

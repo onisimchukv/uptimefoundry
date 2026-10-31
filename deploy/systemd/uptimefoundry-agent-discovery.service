@@ -1,14 +1,14 @@
 [Unit]
-Description=ForgeOps Host Agent Discovery Worker
-Documentation=https://github.com/forgeops/forgeops
-BindsTo=forgeops-agent.service
-After=forgeops-agent.service
+Description=UptimeFoundry Host Agent Discovery Worker
+Documentation=https://github.com/onisimchukv/uptimefoundry
+BindsTo=uptimefoundry-agent.service
+After=uptimefoundry-agent.service
 
 [Service]
 Type=simple
-User=forgeops-agent-disc
-Group=forgeops-agent
-ExecStart=/usr/libexec/forgeops-agent/forgeops-agent-discovery
+User=uptimefoundry-agent-disc
+Group=uptimefoundry-agent
+ExecStart=/usr/libexec/uptimefoundry-agent/uptimefoundry-agent-discovery
 Restart=on-failure
 RestartSec=5s
 
@@ -34,7 +34,7 @@ RestrictAddressFamilies=AF_UNIX
 
 # Read-only host inventory access
 ReadOnlyPaths=/proc /sys /etc
-ReadWritePaths=/run/forgeops-agent
+ReadWritePaths=/run/uptimefoundry-agent
 
 # Resource Budgets (Section 11.1)
 CPUQuota=5%
@@ -42,4 +42,4 @@ MemoryHigh=48M
 MemoryMax=64M
 
 [Install]
-WantedBy=forgeops-agent.service
+WantedBy=uptimefoundry-agent.service

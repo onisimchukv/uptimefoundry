@@ -1,36 +1,42 @@
+# UptimeFoundry Development Stack (PostgreSQL 16 + Apache AGE + pgvector, VictoriaMetrics, Loki)
+#
+# WARNING: THIS COMPOSE CONFIGURATION IS STRICTLY FOR LOCAL DEVELOPMENT AND TESTING.
+# DO NOT USE THIS CONFIGURATION IN PRODUCTION OR EXPOSE THESE PORTS TO PUBLIC NETWORKS.
+
 services:
   postgres:
     build:
       context: .
       dockerfile: Containerfile.postgres
-    image: forgeops/postgres-age-vector:16
-    container_name: forgeops-postgres
+    image: uptimefoundry/postgres-age-vector:16
+    container_name: uptimefoundry-postgres
     environment:
-      POSTGRES_USER: forgeops
-      POSTGRES_PASSWORD: forgeops
-      POSTGRES_DB: forgeops
+      POSTGRES_USER: opsfoundry
+      POSTGRES_PASSWORD: ${UPTIMEFOUNDRY_DEV_DB_PASSWORD:?Set UPTIMEFOUNDRY_DEV_DB_PASSWORD to a local-only development password}
+      POSTGRES_DB: opsfoundry
+    # Bind strictly to loopback interface (127.0.0.1) to prevent unintended external exposure
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ../../migrations/001_initial_schema.sql:/docker-entrypoint-initdb.d/001_initial_schema.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U forgeops -d forgeops"]
+      test: ["CMD-SHELL", "pg_isready -U opsfoundry -d opsfoundry"]
       interval: 5s
       timeout: 5s
       retries: 5
 
   victoriametrics:
     image: victoriametrics/victoria-metrics:v1.104.0
-    container_name: forgeops-victoriametrics
+    container_name: uptimefoundry-victoriametrics
     ports:
-      - "8428:8428"
+      - "127.0.0.1:8428:8428"
     volumes:
       - vmdata:/victoria-metrics-data
     command:
       - "-storageDataPath=/victoria-metrics-data"
       - "-retentionPeriod=14d"
-      - "-httpListenAddr=:8428"
+      - "-httpListenAddr=0.0.0.0:8428"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8428/health"]
       interval: 5s
@@ -39,9 +45,9 @@ services:
 
   loki:
     image: grafana/loki:3.2.0
-    container_name: forgeops-loki
+    container_name: uptimefoundry-loki
     ports:
-      - "3100:3100"
+      - "127.0.0.1:3100:3100"
     command: -config.file=/etc/loki/local-config.yaml
     volumes:
       - lokidata:/loki

@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgeops/forgeops/internal/agent/identity"
-	"github.com/forgeops/forgeops/internal/agent/protocol"
-	"github.com/forgeops/forgeops/internal/core/models"
+	"github.com/onisimchukv/uptimefoundry/internal/agent/identity"
+	"github.com/onisimchukv/uptimefoundry/internal/agent/protocol"
+	"github.com/onisimchukv/uptimefoundry/internal/core/models"
 )
 
 func TestCAEnrollmentAndCloneDetection(t *testing.T) {

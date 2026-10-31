@@ -9,7 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/forgeops/forgeops/migrations"
+	"github.com/onisimchukv/uptimefoundry/migrations"
 )
 
 // Migrate runs embedded SQL migrations in order against the PostgreSQL database.

@@ -1,3 +1,8 @@
+<!-- SPDX-License-Identifier: MIT -->
+# Status: Superseded
+
+This specification is retained as historical design context. It was superseded by [platform-v1.2](platform-v1.2.md), with later agent-specific requirements in [agent-v1.3](agent-v1.3.md).
+
 # ForgeOps — Technical Specification v1.1
 
 **Project:** ForgeOps
