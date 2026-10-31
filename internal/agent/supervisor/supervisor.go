@@ -454,6 +454,19 @@ func (s *Supervisor) startIPC() error {
 		_ = json.NewEncoder(w).Encode(eff)
 	})
 
+	mux.HandleFunc("/diagnostics", func(w http.ResponseWriter, r *http.Request) {
+		bundleBytes, filename, err := s.GenerateDiagnosticsBundle()
+		if err != nil {
+			http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/gzip")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
+		w.Header().Set("X-Bundle-Filename", filename)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(bundleBytes)
+	})
+
 	go func() {
 		_ = http.Serve(listener, mux)
 	}()

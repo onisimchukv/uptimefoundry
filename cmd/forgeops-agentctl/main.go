@@ -135,14 +135,35 @@ func handlePolicyShow(client *http.Client) {
 }
 
 func handleDiagnostics(client *http.Client) {
-	fmt.Println("Collecting diagnostics from agent supervisor...")
-	resp, err := client.Get("http://unix/status")
+	fmt.Println("Collecting diagnostics bundle from agent supervisor...")
+	resp, err := client.Get("http://unix/diagnostics")
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
 		os.Exit(1)
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
-	fmt.Printf("Diagnostics Report Generated: %d bytes\n", len(body))
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		fmt.Printf("Error (%d): %s\n", resp.StatusCode, string(body))
+		os.Exit(1)
+	}
+
+	filename := resp.Header.Get("X-Bundle-Filename")
+	if filename == "" {
+		filename = fmt.Sprintf("diagnostics-%d.tar.gz", time.Now().Unix())
+	}
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Printf("Error reading diagnostics bundle: %v\n", err)
+		os.Exit(1)
+	}
+
+	if err := os.WriteFile(filename, data, 0600); err != nil {
+		fmt.Printf("Error writing bundle to disk: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Diagnostics Bundle successfully generated!\nSaved to: %s (%d bytes)\n", filename, len(data))
 }
