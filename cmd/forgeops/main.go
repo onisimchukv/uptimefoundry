@@ -23,6 +23,13 @@ import (
 	"github.com/forgeops/forgeops/internal/graph/age"
 	"github.com/forgeops/forgeops/internal/graph/fallback"
 	"github.com/forgeops/forgeops/internal/graph/traverser"
+	"github.com/forgeops/forgeops/internal/investigation/ai"
+	"github.com/forgeops/forgeops/internal/investigation/correlator"
+	mcpprotocol "github.com/forgeops/forgeops/internal/mcp/protocol"
+	mcpserver "github.com/forgeops/forgeops/internal/mcp/server"
+	"github.com/forgeops/forgeops/internal/rag/embeddings"
+	"github.com/forgeops/forgeops/internal/rag/graphrag"
+	"github.com/forgeops/forgeops/internal/rag/indexer"
 	"github.com/forgeops/forgeops/internal/storage/postgres"
 	"github.com/forgeops/forgeops/internal/telemetry"
 	"github.com/forgeops/forgeops/internal/telemetry/providers/loki"
@@ -36,6 +43,7 @@ var (
 
 func main() {
 	configPath := flag.String("config", "configs/forgeops.example.yaml", "Path to ForgeOps YAML configuration file")
+	mcpStdio := flag.Bool("mcp", false, "Run Model Context Protocol server over stdio")
 	flag.Parse()
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
@@ -159,6 +167,69 @@ func main() {
 		logger.Info("initialized loki provider",
 			slog.String("endpoint", cfg.Telemetry.Logs.Loki.QueryEndpoint),
 		)
+	}
+
+	// Initialize Knowledge & Incident Repositories
+	var (
+		knowledgeRepo *postgres.KnowledgeRepo
+		incidentRepo  *postgres.IncidentRepo
+	)
+	if db != nil {
+		knowledgeRepo = postgres.NewKnowledgeRepo(db, logger)
+		incidentRepo = postgres.NewIncidentRepo(db, logger)
+	}
+
+	// Initialize Embeddings Provider
+	var embedder embeddings.Provider
+	if cfg.RAG.EmbeddingProvider == "local_tei" && cfg.RAG.EmbeddingEndpoint != "" {
+		embedder = embeddings.NewHTTPProvider(cfg.RAG.EmbeddingEndpoint, 768)
+	} else {
+		embedder = embeddings.NewMockProvider(768)
+	}
+
+	// Initialize GraphRAG Engine & Document Indexer
+	graphRAGEngine := graphrag.NewEngine(resourceRepo, knowledgeRepo, embedder, logger)
+	docIndexer := indexer.NewIndexer(embedder, knowledgeRepo, logger)
+
+	// Initialize Evidence Correlator & AI Investigator
+	evidenceCorrelator := correlator.NewCorrelator(resourceRepo, metricsProvider, logsProvider, graphRAGEngine, logger)
+	aiInvestigator := ai.NewInvestigator(cfg.AI, evidenceCorrelator, incidentRepo, incidentRepo, incidentRepo, logger)
+
+	// Initialize MCP Server Gateway
+	mcpServer := mcpserver.NewServer(
+		mcpserver.Config{
+			AuthToken: cfg.MCP.Server.Transports.SSE.AuthTokenSecretRef,
+		},
+		resourceRepo,
+		incidentRepo,
+		incidentRepo,
+		knowledgeRepo,
+		metricsProvider,
+		logsProvider,
+		graphRAGEngine,
+		logger,
+	)
+
+	// Handle Stdio mode for MCP if requested
+	if *mcpStdio {
+		if err := mcpServer.RunStdio(ctx, os.Stdin, os.Stdout); err != nil {
+			logger.Error("mcp stdio session terminated", slog.Any("error", err))
+		}
+		return
+	}
+
+	// Background indexer for configured runbook sources
+	if cfg.RAG.Enabled && knowledgeRepo != nil {
+		for _, src := range cfg.RAG.Sources {
+			go func(sourcePath, sourceType string) {
+				count, err := docIndexer.IndexDirectory(ctx, sourcePath, models.KnowledgeSourceType(sourceType))
+				if err != nil {
+					logger.Debug("initial knowledge index sweep", slog.String("path", sourcePath), slog.Any("error", err))
+				} else {
+					logger.Info("indexed knowledge directory", slog.String("path", sourcePath), slog.Int("chunks", count))
+				}
+			}(src.Path, src.Type)
+		}
 	}
 
 	mux := http.NewServeMux()
@@ -479,6 +550,230 @@ func main() {
 			"max_uses":       req.MaxUses,
 			"expires_in":     "24h",
 		})
+	})
+
+	// Knowledge & Operational RAG Endpoints (Milestone M6 & M6b)
+	mux.HandleFunc("/api/v1/knowledge/search", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPost {
+			http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+			return
+		}
+		if knowledgeRepo == nil {
+			http.Error(w, `{"error":"knowledge store unavailable"}`, http.StatusServiceUnavailable)
+			return
+		}
+
+		var req struct {
+			Query         string   `json:"query"`
+			ResourceKinds []string `json:"resource_kinds"`
+			TopK          int      `json:"top_k"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, `{"error":"invalid request json"}`, http.StatusBadRequest)
+			return
+		}
+		if req.TopK <= 0 {
+			req.TopK = 5
+		}
+
+		var vec []float32
+		if embedder != nil {
+			vec, _ = embedder.Embed(r.Context(), req.Query)
+		}
+
+		var results []*models.KnowledgeSearchResult
+		var err error
+		if len(req.ResourceKinds) > 0 {
+			results, err = knowledgeRepo.SearchWithTopologyFilter(r.Context(), vec, req.ResourceKinds, req.TopK, 0.5)
+		} else {
+			results, err = knowledgeRepo.SearchHybrid(r.Context(), req.Query, vec, req.TopK, 0.5)
+		}
+
+		if err != nil {
+			http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusInternalServerError)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(results)
+	})
+
+	mux.HandleFunc("/api/v1/knowledge/reindex", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPost {
+			http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+			return
+		}
+		if docIndexer == nil {
+			http.Error(w, `{"error":"indexer unavailable"}`, http.StatusServiceUnavailable)
+			return
+		}
+
+		total := 0
+		for _, src := range cfg.RAG.Sources {
+			count, err := docIndexer.IndexDirectory(r.Context(), src.Path, models.KnowledgeSourceType(src.Type))
+			if err != nil {
+				logger.Warn("reindex error on path", slog.String("path", src.Path), slog.Any("error", err))
+			} else {
+				total += count
+			}
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": "reindexed", "total_chunks": total})
+	})
+
+	// Incidents & AI-Assisted Investigation Endpoints (Milestone M8)
+	mux.HandleFunc("/api/v1/incidents", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if incidentRepo == nil {
+			http.Error(w, `{"error":"incident repository unavailable"}`, http.StatusServiceUnavailable)
+			return
+		}
+
+		if r.Method == http.MethodPost {
+			var inc models.Incident
+			if err := json.NewDecoder(r.Body).Decode(&inc); err != nil {
+				http.Error(w, `{"error":"invalid request json"}`, http.StatusBadRequest)
+				return
+			}
+			if err := incidentRepo.CreateIncident(r.Context(), &inc); err != nil {
+				http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusInternalServerError)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(inc)
+			return
+		}
+
+		if r.Method == http.MethodGet {
+			envID := r.URL.Query().Get("environment_id")
+			status := models.IncidentStatus(r.URL.Query().Get("status"))
+			limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+			offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+
+			incidents, err := incidentRepo.ListIncidents(r.Context(), envID, status, limit, offset)
+			if err != nil {
+				http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusInternalServerError)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(incidents)
+			return
+		}
+
+		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+	})
+
+	mux.HandleFunc("/api/v1/incidents/investigate", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPost {
+			http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+			return
+		}
+		if aiInvestigator == nil {
+			http.Error(w, `{"error":"investigation engine unavailable"}`, http.StatusServiceUnavailable)
+			return
+		}
+
+		var req struct {
+			IncidentID string `json:"incident_id"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		if req.IncidentID == "" {
+			req.IncidentID = r.URL.Query().Get("incident_id")
+		}
+		if req.IncidentID == "" {
+			http.Error(w, `{"error":"incident_id is required"}`, http.StatusBadRequest)
+			return
+		}
+
+		inv, err := aiInvestigator.Investigate(r.Context(), req.IncidentID)
+		if err != nil {
+			http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusInternalServerError)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(inv)
+	})
+
+	mux.HandleFunc("/api/v1/investigations", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if incidentRepo == nil {
+			http.Error(w, `{"error":"investigation store unavailable"}`, http.StatusServiceUnavailable)
+			return
+		}
+		id := r.URL.Query().Get("id")
+		if id == "" {
+			http.Error(w, `{"error":"id is required"}`, http.StatusBadRequest)
+			return
+		}
+		inv, err := incidentRepo.GetInvestigationByID(r.Context(), id)
+		if err != nil {
+			http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusNotFound)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(inv)
+	})
+
+	mux.HandleFunc("/api/v1/remediations", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if incidentRepo == nil {
+			http.Error(w, `{"error":"remediation store unavailable"}`, http.StatusServiceUnavailable)
+			return
+		}
+		id := r.URL.Query().Get("id")
+		if id == "" {
+			http.Error(w, `{"error":"id is required"}`, http.StatusBadRequest)
+			return
+		}
+		rem, err := incidentRepo.GetProposalByID(r.Context(), id)
+		if err != nil {
+			http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusNotFound)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(rem)
+	})
+
+	mux.HandleFunc("/api/v1/remediations/approve", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPost {
+			http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+			return
+		}
+		if incidentRepo == nil {
+			http.Error(w, `{"error":"remediation store unavailable"}`, http.StatusServiceUnavailable)
+			return
+		}
+
+		var req struct {
+			ID       string `json:"id"`
+			Approver string `json:"approver"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, `{"error":"invalid request json"}`, http.StatusBadRequest)
+			return
+		}
+
+		if err := incidentRepo.ApproveProposal(r.Context(), req.ID, req.Approver); err != nil {
+			http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadRequest)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "approved", "id": req.ID})
+	})
+
+	// MCP Gateway Endpoints (Milestone M7)
+	mux.HandleFunc("/mcp/rpc", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+			return
+		}
+		var rpcReq mcpprotocol.Request
+		if err := json.NewDecoder(r.Body).Decode(&rpcReq); err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(mcpprotocol.Response{
+				JSONRPC: "2.0",
+				Error:   &mcpprotocol.Error{Code: mcpprotocol.ErrCodeParse, Message: err.Error()},
+			})
+			return
+		}
+		resp := mcpServer.HandleRequest(r.Context(), rpcReq)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
 	})
 
 	server := &http.Server{
