@@ -5,7 +5,7 @@ This is the current design specification for the agent. It does not imply that e
 
 # UptimeFoundry Agent — Technical Specification v1.3
 
-Oct 24, 2026 · @Vitalii
+Revised 1 November 2026 · Vitalii Onisimchuk
 
 ## 1. Purpose, scope, and changes from v1.2
 
@@ -45,6 +45,25 @@ Oct 24, 2026 · @Vitalii
 | Local control | Not specified | Root-owned policy ceiling that remote configuration can narrow but not widen |
 
 Safeguards that v1.2 dropped from v1.1 and that apply to the agent again: TLS is mandatory for every remote endpoint, insecure TLS is off by default, and the failure of any optional provider must not stop discovery.
+
+### 1.4 Naming and licensing
+
+This revision (1 November 2026) renames the product from ForgeOps, through OpsFoundry, to UptimeFoundry. The technical design is unchanged. Identifiers follow the repository at `github.com/onisimchukv/uptimefoundry`, and earlier specification versions may still use the old names.
+
+| Item | Name |
+| --- | --- |
+| Control plane binary | `uptimefoundry` |
+| CLI | `uptimefoundry-cli` |
+| Agent supervisor | `uptimefoundry-agent` |
+| Agent local control tool | `uptimefoundry-agentctl` |
+| Actuator | `uptimefoundry-agent-actuator` |
+| Service users, group and directories | `uptimefoundry-agent`, `/etc/uptimefoundry-agent/`, `/var/lib/uptimefoundry-agent/` |
+| Agent metric prefix | `uptimefoundry_agent_` |
+| SELinux types | `uptimefoundry_agent_t` and the per-process variants in section 13.3 |
+| Environment variables | `UPTIMEFOUNDRY_` prefix |
+| Licence | MIT, with an SPDX identifier in each source file |
+
+Programs loaded into the kernel must declare a GPL-compatible licence string, because many BPF helpers are GPL-only. The eBPF C sources therefore carry a dual declaration such as `Dual MIT/GPL` in their `license` section, and the release notes state this. Confirm the exact string against the kernel's accepted list before the first release.
 
 ## 2. Threat model and trust boundaries
 
@@ -100,7 +119,26 @@ The agent's design assumption is that any single component can be compromised, a
 
 The agent is four cooperating processes, not one. The only process that opens network connections holds no BPF privileges, and the only process that holds BPF privileges has no network access.
 
-&#91;embedded content: process model · 4 processes, one with network egress\]
+```mermaid
+flowchart TB
+    CP["Control plane<br/>ingestion, policy, signed tasks"]
+    BE["Backends<br/>no agent access"]
+    CP -.-> BE
+    subgraph HOST["Host (one agent per host)"]
+        SUP["<b>supervisor</b><br/>Only process with network egress<br/>mTLS stream, WAL, policy ceiling"]
+        DISC["<b>discovery</b><br/>Unprivileged user<br/>procfs, sysfs, D-Bus<br/>No network"]
+        EBPF["<b>ebpf</b><br/>Narrow capability set<br/>Flows, OBI, parsers<br/>No network egress"]
+        ACT["<b>actuator</b> (optional, A5)<br/>Separate package and unit<br/>Off by default"]
+        WL["Observed workloads<br/>untrusted input"]
+    end
+    CP <-->|"mTLS gRPC, agent dials out"| SUP
+    DISC -->|"Unix socket"| SUP
+    EBPF -->|"Unix socket"| SUP
+    SUP -->|"Unix socket"| ACT
+    WL -->|"kernel events and socket data"| EBPF
+```
+
+*Figure: the process model. Only the supervisor reaches the network; the privileged `ebpf` process cannot.*
 
 Discovery and eBPF hand schema-checked records to the supervisor over local sockets, and the supervisor alone talks to the control plane. Backends are never reachable from the host.
 
@@ -772,7 +810,21 @@ A release candidate must pass every lane on every supported platform, with the b
 
 The agent is delivered in five steps that map onto platform milestones M2 to M9. Each step must pass its gate before the next begins, and the actuator is the last step because it needs the approval and audit framework.
 
-&#91;embedded content: agent roadmap · 5 steps, 4 exit gates\]
+```mermaid
+flowchart LR
+    A1["<b>A1 Foundation</b><br/>Enrollment, mTLS<br/>Heartbeat, WAL<br/>Host discovery"]
+    A2["<b>A2 OBI</b><br/>Wrap upstream OBI<br/>Opt-in processes<br/>On-host redaction"]
+    A3["<b>A3 Topology</b><br/>Flow table<br/>Service and pod resolution<br/>Deltas"]
+    A4["<b>A4 Hardening</b><br/>SELinux policy<br/>systemd limits<br/>DaemonSet, ladder"]
+    A5["<b>A5 Actuator</b><br/>Separate package<br/>Needs approval and audit (M9)"]
+    A1 -->|"Gate: survives outage,<br/>tiers 3 and 4 ok"| A2
+    A2 -->|"Gate: no seeded secret<br/>leaves the host"| A3
+    A3 -->|"Gate: edges target<br/>workloads"| A4
+    A4 -.->|"Gate: SELinux enforcing,<br/>budgets met"| A5
+    style A5 stroke-dasharray: 5 5
+```
+
+*Figure: the roadmap. Exit gates sit between steps. The dashed A5 step starts only after the platform approval and audit framework exists.*
 
 | Step | Deliverables | Exit criteria (section 15.3 numbers) |
 | --- | --- | --- |
@@ -798,8 +850,8 @@ A1 is the first vertical slice and should be built alongside platform M2, so the
 | Section 16, `POST /topology/cypher` | Run under a read-only database role with statement timeout and a query allowlist, since the API alone cannot guarantee read-only behaviour |
 | Section 23 and 9.5, two CPU figures | Replace with the tested budgets in section 11 |
 | Section 26, latency and similarity criteria | Replace with measured service-level targets and retrieval quality metrics (Recall@K, MRR) on a labelled set |
-| Ports | Resolve the clash between MCP SSE and the embedding endpoint (both 8081) and the control plane (8080) with one documented port plan |
-| Binary and endpoint names | Standardize `uptimefoundry-server` or `uptimefoundry`, `uptimefoundry-cli` or `uptimefoundryctl`, and `/health/*` or `/healthz` across all documents |
+| Ports | The port plan is documented in the platform specification and example config: control plane 8080, embedding endpoint 8081, MCP SSE 8082. Separate SSE listener startup remains unimplemented. |
+| Binary and endpoint names | Binary names are now standardized in the repository as `uptimefoundry`, `uptimefoundry-cli`, `uptimefoundry-agent`, `uptimefoundry-agentctl` and `uptimefoundry-agent-actuator`. Still to standardize across all documents: `/health/*` or `/healthz` (the repository currently serves `/readyz` and `/api/v1/status`) |
 | Section 20, "cryptographic authorization" | Define signing keys, key holders, signed content and verification for tasks, policy and remediation approval |
 | v1.1 safeguards | Restore TLS-required remote endpoints, no insecure TLS by default, SSRF protection, partial-result handling, retention awareness and provider failure isolation |
 | Graph store | Consider recursive queries on the relational `relationships` table for the first release and add Apache AGE only if multi-hop performance requires it |

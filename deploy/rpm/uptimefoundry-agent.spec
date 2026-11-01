@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 Name:           uptimefoundry-agent
 Version:        1.3.0
 Release:        1%{?dist}

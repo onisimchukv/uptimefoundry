@@ -1,3 +1,5 @@
+-- SPDX-License-Identifier: MIT
+
 -- UptimeFoundry Schema Migration 002: Discovery Runs Table
 
 CREATE TABLE IF NOT EXISTS discovery_runs (

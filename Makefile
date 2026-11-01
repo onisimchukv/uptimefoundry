@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 # UptimeFoundry Makefile
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 UptimeFoundry Contributors

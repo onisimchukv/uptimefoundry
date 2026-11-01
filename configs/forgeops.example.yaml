@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 # Legacy ForgeOps filename retained for configuration migration.
 # New installations should use configs/uptimefoundry.example.yaml.
 
@@ -80,7 +82,7 @@ mcp:
     transports:
       stdio: false
       sse:
-        enabled: true
+        enabled: false # SSE listener startup is not yet wired into the control-plane binary
         port: 8082
         auth_token_secret_ref: "uptimefoundry/mcp-token"
   client:

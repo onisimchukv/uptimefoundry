@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 package capability
 
 // Tier represents the operational capability level of the agent.

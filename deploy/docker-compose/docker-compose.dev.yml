@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 # UptimeFoundry Development Stack (PostgreSQL 16 + Apache AGE + pgvector, VictoriaMetrics, Loki)
 #
 # WARNING: THIS COMPOSE CONFIGURATION IS STRICTLY FOR LOCAL DEVELOPMENT AND TESTING.

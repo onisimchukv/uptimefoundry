@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 # Makefile for UptimeFoundry Agent SELinux Policy Module
 MODULE = uptimefoundry_agent
 SHARE = /usr/share/selinux/devel

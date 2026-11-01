@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // UptimeFoundry Agent Actuator — Separate Binary for Remediation Execution
 //
 // This is intentionally a distinct binary and package from the main agent supervisor.

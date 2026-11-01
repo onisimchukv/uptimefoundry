@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 # UptimeFoundry Configuration Example
 #
 # NOTE: For production deployments, all endpoints must enforce TLS/mTLS,
@@ -83,8 +85,8 @@ mcp:
     transports:
       stdio: false
       sse:
-        enabled: true
-        port: 8082 # Distinct port from TEI embedding endpoint (8081)
+        enabled: false # SSE listener startup is not yet wired into the control-plane binary
+        port: 8082 # Reserved; embeddings use 8081 and the control plane uses 8080
         auth_token_secret_ref: "uptimefoundry/mcp-token"
   client:
     enabled: false

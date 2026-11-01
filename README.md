@@ -10,7 +10,7 @@ UptimeFoundry is in design and early implementation. The repository contains wor
 - The control-plane binary starts and serves `/readyz` and `/api/v1/status`.
 - PostgreSQL storage, migrations, discovery repositories, and graph fallbacks are implemented in the codebase; configure a database to use the persistent path.
 - Host inventory collectors and VictoriaMetrics and Loki query clients are present.
-- MCP stdio and SSE server transports and a client are implemented.
+- MCP stdio is wired into the control-plane binary; the SSE transport handler and MCP client exist, but separate SSE listener startup is not yet integrated.
 - Agent, discovery, eBPF-worker, and actuator command entry points exist. Their presence does not mean the complete v1.3 agent design or production eBPF probe set is implemented.
 
 GraphRAG, eBPF/OBI coverage, Kubernetes discovery, signed remediation, and the v1.3 agent architecture should be treated as design or early implementation until the relevant behavior is verified and released. See [the specifications](docs/specs/) for the design status and version history.
@@ -78,4 +78,4 @@ Please report vulnerabilities privately. See [SECURITY.md](SECURITY.md). Do not 
 
 ## License
 
-MIT. New source files should carry the SPDX identifier `MIT` in the language's comment syntax (for example, `// SPDX-License-Identifier: MIT` in Go and `# SPDX-License-Identifier: MIT` in YAML). Markdown files may use an HTML comment. The root [LICENSE](LICENSE) is authoritative.
+MIT. Source files carry the SPDX identifier `MIT` in their comment syntax (for example, `// SPDX-License-Identifier: MIT` in Go, `-- SPDX-License-Identifier: MIT` in SQL, and `# SPDX-License-Identifier: MIT` in deployment files). Markdown uses an HTML comment. Any future eBPF C program must also declare a GPL-compatible kernel program licence in its BPF `license` section, independently of its source-file SPDX header. The root [LICENSE](LICENSE) is authoritative.

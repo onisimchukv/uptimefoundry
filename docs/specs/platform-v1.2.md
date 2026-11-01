@@ -764,6 +764,14 @@ USING GIN (to_tsvector('english', title || ' ' || content));
 
 # 15. Configuration
 
+The example port plan is:
+
+| Service | Port | Notes |
+| --- | ---: | --- |
+| Control plane | 8080 | API and local health endpoints |
+| Embedding service | 8081 | Local TEI-compatible endpoint |
+| MCP SSE | 8082 | Planned separate listener; startup integration remains pending |
+
 ```yaml
 server:
   listen_address: "0.0.0.0:8080"
@@ -839,7 +847,7 @@ mcp:
       stdio: false
       sse:
         enabled: true
-        port: 8081
+        port: 8082
         auth_token_secret_ref: "forgeops/mcp-token"
   client:
     enabled: true

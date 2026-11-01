@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 # Executables
 /usr/bin/uptimefoundry-agent                 -- gen_context(system_u:object_r:uptimefoundry_agent_exec_t,s0)
 /usr/bin/uptimefoundry-agentctl              -- gen_context(system_u:object_r:bin_t,s0)

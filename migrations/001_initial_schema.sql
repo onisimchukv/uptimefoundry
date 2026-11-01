@@ -1,3 +1,5 @@
+-- SPDX-License-Identifier: MIT
+
 -- UptimeFoundry Schema Migration 001: Initial Relational, Property Graph, and Vector Schema
 
 -- 1. Enable Core and Vector Extensions
