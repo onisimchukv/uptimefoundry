@@ -1,0 +1,57 @@
+# SPDX-License-Identifier: MIT
+name: Publish control-plane container
+
+on:
+  push:
+    branches: [master]
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Build and publish to GHCR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish control-plane image
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: ./Dockerfile
+          target: control-plane
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ghcr.io/onisimchukv/uptimefoundry-control-plane:latest
+            ghcr.io/onisimchukv/uptimefoundry-control-plane:sha-${{ github.sha }}
+            ghcr.io/onisimchukv/uptimefoundry-control-plane:${{ github.ref_name }}
+          sbom: true
+          provenance: mode=max
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@dc72c7d5c4d10cd6bcb8cf6e3fd625a9e5e537da # v3.7.0
+
+      - name: Sign published image by digest
+        env:
+          COSIGN_YES: "true"
+        run: cosign sign ghcr.io/onisimchukv/uptimefoundry-control-plane@${{ steps.build.outputs.digest }}

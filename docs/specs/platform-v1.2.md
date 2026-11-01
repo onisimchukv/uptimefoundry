@@ -1112,7 +1112,7 @@ The release is certified production-ready when:
 
 # 28. Final Architectural Decisions Summary
 
-1. **Language:** Go 1.23+ modular monolith.
+1. **Language:** Go 1.27+ modular monolith. (Historical specification; superseded for current design.)
 2. **Unified Data Layer:** PostgreSQL 16+ combining Relational ACID + **Apache AGE** (property graph) + **pgvector** (vector embeddings).
 3. **Observability Standards:** OpenTelemetry OTLP + **OpenTelemetry eBPF Instrumentation (OBI)** for zero-code kernel metrics and socket mapping.
 4. **High-Velocity Telemetry:** VictoriaMetrics (Metrics) and Loki (Logs).

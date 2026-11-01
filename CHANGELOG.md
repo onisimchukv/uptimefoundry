@@ -61,7 +61,7 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ### Changed
 - Command source directories and deployment identifiers now use the UptimeFoundry name
-- `go.mod`: added `toolchain go1.27.0`
+- `go.mod`: raised the minimum supported Go version to 1.27.3
 - `Makefile`: binary output names updated to `uptimefoundry*`; added `vulncheck` and `sbom` targets
 - Example configs: TLS warnings, `127.0.0.1` bindings, MCP SSE moved to port 8082
 

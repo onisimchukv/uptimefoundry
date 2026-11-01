@@ -34,10 +34,10 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - uses: golangci/golangci-lint-action@971e284b6050e8a5849b72094c50ab08da042db8  # v6.1.1
+      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a  # v9.3.0
         with:
-          version: latest
-          args: --timeout=5m --enable=gosec,govet,errcheck,staticcheck,unused,gocritic
+          version: v2.15.0
+          args: --timeout=5m --enable-only=gosec,govet,errcheck,staticcheck,unused,gocritic
 
   # ── 3. govulncheck ────────────────────────────────────────────────────────
   govulncheck:
@@ -49,7 +49,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - uses: golang/govulncheck-action@b625fbe08f3bccbe446d94fbf87ffa3efe7ad202  # v1.0.4
+      - uses: golang/govulncheck-action@032d45514ae346b1db93c04b0c90b841c370344f  # v1.1.0
         with:
           go-version-file: go.mod
           go-package: ./...

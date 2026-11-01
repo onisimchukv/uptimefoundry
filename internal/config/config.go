@@ -302,20 +302,31 @@ func DefaultConfig() *Config {
 func Load(path string) (*Config, error) {
 	cfg := DefaultConfig()
 
-	if path == "" {
-		return cfg, nil
-	}
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return cfg, nil // Return defaults if optional file doesn't exist
+	if path != "" {
+		data, err := os.ReadFile(path)
+		if err != nil && !os.IsNotExist(err) {
+			return nil, fmt.Errorf("read config file: %w", err)
 		}
-		return nil, fmt.Errorf("read config file: %w", err)
+		if err == nil {
+			if err := yaml.Unmarshal(data, cfg); err != nil {
+				return nil, fmt.Errorf("unmarshal config yaml: %w", err)
+			}
+		}
 	}
 
-	if err := yaml.Unmarshal(data, cfg); err != nil {
-		return nil, fmt.Errorf("unmarshal config yaml: %w", err)
+	// These overrides let containers receive secrets and bind addresses from
+	// their runtime environment without baking either into the image.
+	if value, ok := os.LookupEnv("UPTIMEFOUNDRY_SERVER_LISTEN_ADDRESS"); ok {
+		cfg.Server.ListenAddress = value
+	}
+	if value, ok := os.LookupEnv("UPTIMEFOUNDRY_DATABASE_DSN"); ok {
+		cfg.Database.DSN = value
+	}
+	if value, ok := os.LookupEnv("UPTIMEFOUNDRY_METRICS_VICTORIAMETRICS_ENDPOINT"); ok {
+		cfg.Telemetry.Metrics.VictoriaMetrics.QueryEndpoint = value
+	}
+	if value, ok := os.LookupEnv("UPTIMEFOUNDRY_LOGS_LOKI_ENDPOINT"); ok {
+		cfg.Telemetry.Logs.Loki.QueryEndpoint = value
 	}
 
 	return cfg, nil

@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: MIT
+
+.git
+.github
+.idea
+.vscode
+bin
+dist
+coverage.txt
+coverage.html
+*.local.yaml
+*.local.yml
+*.secret.yaml
+*.secret.yml
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.keystore
+state
+run

@@ -28,6 +28,28 @@ services:
       timeout: 5s
       retries: 5
 
+  control-plane:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      target: control-plane
+    image: uptimefoundry/control-plane:dev
+    container_name: uptimefoundry-control-plane
+    depends_on:
+      postgres:
+        condition: service_healthy
+      victoriametrics:
+        condition: service_started
+      loki:
+        condition: service_started
+    environment:
+      UPTIMEFOUNDRY_SERVER_LISTEN_ADDRESS: "0.0.0.0:8080"
+      UPTIMEFOUNDRY_DATABASE_DSN: "postgres://opsfoundry:${UPTIMEFOUNDRY_DEV_DB_PASSWORD:?Set UPTIMEFOUNDRY_DEV_DB_PASSWORD to a local-only development password}@postgres:5432/opsfoundry?sslmode=disable"
+      UPTIMEFOUNDRY_METRICS_VICTORIAMETRICS_ENDPOINT: "http://victoriametrics:8428"
+      UPTIMEFOUNDRY_LOGS_LOKI_ENDPOINT: "http://loki:3100"
+    ports:
+      - "127.0.0.1:8080:8080"
+
   victoriametrics:
     image: victoriametrics/victoria-metrics:v1.104.0
     container_name: uptimefoundry-victoriametrics

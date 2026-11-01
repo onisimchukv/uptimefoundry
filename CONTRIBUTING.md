@@ -43,9 +43,9 @@ All participants in the UptimeFoundry project are expected to follow our
 
 | Tool | Version |
 |---|---|
-| Go | 1.27+ (`go version`) |
+| Go | 1.27.3+ (`go version`); repository toolchain: 1.27.3 |
 | Docker + Compose | For integration test stack |
-| `golangci-lint` | Latest — `go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest` |
+| `golangci-lint` | v2.15.0 — `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0` |
 | `govulncheck` | Latest — `go install golang.org/x/vuln/cmd/govulncheck@latest` |
 
 ### First-time setup

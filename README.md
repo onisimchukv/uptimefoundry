@@ -21,7 +21,7 @@ This quick start is for local development only. It exposes the control-plane hea
 
 ### Requirements
 
-- Go 1.23 or newer (the repository toolchain is Go 1.27.0)
+- Go 1.27.3 or newer (the repository toolchain is Go 1.27.3)
 - Docker and Docker Compose
 
 ### Start the local data services
@@ -41,6 +41,22 @@ docker compose -f deploy/docker-compose/docker-compose.dev.yml up -d
 ```
 
 The database, VictoriaMetrics, and Loki ports are published only on `127.0.0.1`. The password is required and has no committed fallback. This stack is not hardened for production.
+
+### Run the control plane in a container
+
+The control plane has a repository-root Docker build context. From the repository root, build it with:
+
+```sh
+docker build --target control-plane -t uptimefoundry/control-plane:dev .
+```
+
+The development Compose file builds and starts the control plane together with PostgreSQL, VictoriaMetrics, and Loki. It publishes the control-plane port on loopback only. Provide the same development-only database password shown above, then run:
+
+```sh
+docker compose -f deploy/docker-compose/docker-compose.dev.yml up --build
+```
+
+The container listens on its internal network interface so Docker can forward traffic; the host port remains bound to `127.0.0.1`. Plain HTTP and the development database configuration are strictly for local use.
 
 ### Configure and run the control plane
 
