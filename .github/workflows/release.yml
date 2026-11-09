@@ -70,7 +70,7 @@ jobs:
           done
 
       - name: Upload release artifacts
-        uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191 # v2.2.1
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v2.2.1
         with:
           files: dist/*
           generate_release_notes: true
