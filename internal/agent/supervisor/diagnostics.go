@@ -23,7 +23,11 @@ func (s *Supervisor) GenerateDiagnosticsBundle() ([]byte, string, error) {
 	tw := tar.NewWriter(gzw)
 
 	timestamp := time.Now().UTC().Format("20060102-150405")
-	filename := fmt.Sprintf("diagnostics-%s-%s.tar.gz", s.id.AgentID, timestamp)
+	agentID := "unidentified"
+	if s.id != nil && s.id.AgentID != "" {
+		agentID = s.id.AgentID
+	}
+	filename := fmt.Sprintf("diagnostics-%s-%s.tar.gz", agentID, timestamp)
 
 	addJSONFile := func(name string, v any) error {
 		data, err := json.MarshalIndent(v, "", "  ")
@@ -55,22 +59,7 @@ func (s *Supervisor) GenerateDiagnosticsBundle() ([]byte, string, error) {
 
 	// 3. Supervisor Status Snapshot
 	walBytes, unacked, drops, _ := s.wal.Stats()
-	shed := int(s.watchdog.CurrentLevel())
-	status := map[string]any{
-		"agent_id":           s.id.AgentID,
-		"host_fingerprint":   s.id.HostFingerprint,
-		"tier":               s.capability.Tier.String(),
-		"connected":          s.connected,
-		"last_contact":       s.lastContact,
-		"wal_bytes":          walBytes,
-		"unacked_messages":   unacked,
-		"shed_level":         shed,
-		"shed_level_name":    s.watchdog.CurrentLevel().String(),
-		"drop_counters":      drops,
-		"policy_conflicts":   s.effective.Conflicts,
-		"kill_switch":        s.effective.KillSwitchActive,
-		"certificate_expiry": s.id.ExpiresAt,
-	}
+	status := s.statusLocked()
 	if err := addJSONFile("supervisor_status.json", status); err != nil {
 		return nil, "", fmt.Errorf("archive supervisor status: %w", err)
 	}

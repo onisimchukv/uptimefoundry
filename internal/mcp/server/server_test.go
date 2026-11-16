@@ -7,6 +7,8 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -197,5 +199,53 @@ func TestMCPServer_StdioTransport(t *testing.T) {
 	}
 	if resp.Error != nil {
 		t.Fatalf("unexpected ping error: %v", resp.Error)
+	}
+}
+
+func TestMCPServer_HTTPAndSSE(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	srv := NewServer(Config{AuthToken: "secret-token"}, nil, nil, nil, nil, nil, nil, nil, logger)
+
+	handler := srv.HTTPHandler()
+
+	// 1. Unauthorized request
+	req := httptest.NewRequest(http.MethodPost, "/rpc", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"ping"}`))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 Unauthorized, got %d", rec.Code)
+	}
+
+	// 2. Authorized RPC ping
+	req = httptest.NewRequest(http.MethodPost, "/rpc", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"ping"}`))
+	req.Header.Set("Authorization", "Bearer secret-token")
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", rec.Code)
+	}
+	var resp protocol.Response
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode JSON-RPC response: %v", err)
+	}
+	resMap, ok := resp.Result.(map[string]any)
+	if !ok || resMap["status"] != "pong" {
+		t.Errorf("expected status: pong, got %v", resp.Result)
+	}
+
+	// 3. SSE endpoint
+	ctx, cancel := context.WithCancel(context.Background())
+	req = httptest.NewRequestWithContext(ctx, http.MethodGet, "/sse", nil)
+	req.Header.Set("Authorization", "Bearer secret-token")
+	rec = httptest.NewRecorder()
+
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		cancel()
+	}()
+	handler.ServeHTTP(rec, req)
+
+	if !strings.Contains(rec.Body.String(), "event: endpoint\ndata: /rpc\n\n") {
+		t.Errorf("expected SSE endpoint event in body, got: %s", rec.Body.String())
 	}
 }

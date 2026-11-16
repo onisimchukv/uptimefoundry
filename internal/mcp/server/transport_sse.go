@@ -13,17 +13,20 @@ import (
 	"github.com/onisimchukv/uptimefoundry/internal/mcp/protocol"
 )
 
+// HTTPHandler returns an http.Handler serving SSE (/sse) and JSON-RPC dispatch (/rpc or /message).
+func (s *Server) HTTPHandler() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/rpc", s.HandleHTTPRPC)
+	mux.HandleFunc("/message", s.HandleHTTPRPC)
+	mux.HandleFunc("/sse", s.HandleSSE)
+	return s.authMiddleware(mux)
+}
+
 // RunHTTP launches an HTTP listener exposing SSE (/sse) and JSON-RPC dispatch (/rpc or /message).
 func (s *Server) RunHTTP(ctx context.Context, addr string) error {
-	mux := http.NewServeMux()
-
-	mux.HandleFunc("/rpc", s.handleHTTPRPC)
-	mux.HandleFunc("/message", s.handleHTTPRPC)
-	mux.HandleFunc("/sse", s.handleSSE)
-
 	srv := &http.Server{
 		Addr:         addr,
-		Handler:      s.authMiddleware(mux),
+		Handler:      s.HTTPHandler(),
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 60 * time.Second,
 	}
@@ -56,7 +59,8 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func (s *Server) handleHTTPRPC(w http.ResponseWriter, r *http.Request) {
+// HandleHTTPRPC processes inbound JSON-RPC requests over HTTP POST.
+func (s *Server) HandleHTTPRPC(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -77,7 +81,8 @@ func (s *Server) handleHTTPRPC(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
-func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
+// HandleSSE handles persistent Server-Sent Events client connections.
+func (s *Server) HandleSSE(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "streaming unsupported", http.StatusInternalServerError)

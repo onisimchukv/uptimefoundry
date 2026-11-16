@@ -3,6 +3,7 @@
 package supervisor
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -52,6 +54,7 @@ type Supervisor struct {
 	watchdog       *Watchdog
 	ipcListener    net.Listener
 	logger         *slog.Logger
+	httpClient     *http.Client
 	connected      bool
 	lastContact    time.Time
 	streamEpoch    uint64
@@ -100,6 +103,7 @@ func New(cfg Config, logger *slog.Logger) (*Supervisor, error) {
 		flowTable:   flowTable,
 		dnsTracker:  dnsTracker,
 		logger:      logger,
+		httpClient:  &http.Client{Timeout: 10 * time.Second},
 	}
 
 	wcfg := DefaultWatchdogConfig()
@@ -172,6 +176,9 @@ func (s *Supervisor) Start(ctx context.Context) error {
 	// 8. Start Watchdog Resource Monitor & Shedding Engine (Section 11.2)
 	s.watchdog.Start(ctx)
 
+	// 9. Start WAL Egress Streaming Loop
+	go s.runEgressLoop(ctx)
+
 	return nil
 }
 
@@ -196,9 +203,149 @@ func (s *Supervisor) enroll(ctx context.Context) error {
 		return fmt.Errorf("create enrollment csr: %w", err)
 	}
 
-	// Note: in full production with mTLS, this is an outbound TLS call to /api/v1/agent/enroll
-	s.logger.Info("created enrollment csr", slog.Int("csr_len", len(csrPEM)))
+	enrollURL := strings.TrimRight(s.cfg.ControlPlaneURL, "/") + "/api/v1/agent/enroll"
+	reqBody := map[string]string{
+		"token":            s.cfg.BootstrapToken,
+		"host_fingerprint": s.id.HostFingerprint,
+		"csr_pem":          string(csrPEM),
+	}
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return fmt.Errorf("marshal enroll request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, enrollURL, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return fmt.Errorf("create enroll request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("enrollment http call: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		var errResp map[string]string
+		_ = json.NewDecoder(resp.Body).Decode(&errResp)
+		return fmt.Errorf("enrollment rejected (status %d): %s", resp.StatusCode, errResp["error"])
+	}
+
+	var enrollResp struct {
+		AgentID        string    `json:"agent_id"`
+		CertificatePEM string    `json:"certificate_pem"`
+		CACertPEM      string    `json:"ca_cert_pem"`
+		ExpiresAt      time.Time `json:"expires_at"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&enrollResp); err != nil {
+		return fmt.Errorf("decode enrollment response: %w", err)
+	}
+
+	_ = os.MkdirAll(filepath.Dir(s.id.CertPath), 0700)
+	if err := os.WriteFile(s.id.CertPath, []byte(enrollResp.CertificatePEM), 0600); err != nil {
+		return fmt.Errorf("write agent cert: %w", err)
+	}
+
+	cert, rawPEM, err := identity.LoadCertificate(s.id.CertPath)
+	if err != nil {
+		return fmt.Errorf("load enrolled cert: %w", err)
+	}
+
+	s.mu.Lock()
+	s.id.Certificate = cert
+	s.id.RawCertPEM = rawPEM
+	s.id.AgentID = enrollResp.AgentID
+	s.id.ExpiresAt = enrollResp.ExpiresAt
+	s.mu.Unlock()
+
+	s.logger.Info("agent successfully enrolled with control plane",
+		slog.String("agent_id", s.id.AgentID),
+		slog.Time("expires_at", s.id.ExpiresAt),
+	)
 	return nil
+}
+
+func (s *Supervisor) runEgressLoop(ctx context.Context) {
+	ticker := time.NewTicker(3 * time.Second)
+	defer ticker.Stop()
+
+	endpoint := strings.TrimRight(s.cfg.ControlPlaneURL, "/") + "/api/v1/agent/message"
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			s.drainWAL(ctx, endpoint)
+		}
+	}
+}
+
+func (s *Supervisor) drainWAL(ctx context.Context, endpoint string) {
+	batch := s.wal.Peek(10)
+	if len(batch) == 0 {
+		return
+	}
+
+	for _, msg := range batch {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		s.mu.RLock()
+		if msg.AgentID == "" && s.id != nil {
+			msg.AgentID = s.id.AgentID
+		}
+		s.mu.RUnlock()
+
+		data, err := json.Marshal(msg)
+		if err != nil {
+			s.logger.Error("failed to marshal wal message for egress", slog.Any("error", err))
+			continue
+		}
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(data))
+		if err != nil {
+			s.logger.Error("failed to create egress request", slog.Any("error", err))
+			continue
+		}
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err := s.httpClient.Do(req)
+		if err != nil {
+			s.mu.Lock()
+			s.connected = false
+			s.mu.Unlock()
+			s.logger.Debug("control plane unreachable during wal egress", slog.Any("error", err))
+			return
+		}
+
+		if resp.StatusCode == http.StatusOK {
+			var srvMsg protocol.ServerMessage
+			if err := json.NewDecoder(resp.Body).Decode(&srvMsg); err == nil {
+				s.wal.Acknowledge(srvMsg.AckClass, srvMsg.AckSequence)
+			}
+			resp.Body.Close()
+
+			s.mu.Lock()
+			s.connected = true
+			s.lastContact = time.Now()
+			s.mu.Unlock()
+		} else {
+			resp.Body.Close()
+			s.mu.Lock()
+			s.connected = false
+			s.mu.Unlock()
+			s.logger.Warn("control plane rejected agent message",
+				slog.Int("status", resp.StatusCode),
+				slog.Uint64("seq", msg.Sequence),
+			)
+			return
+		}
+	}
 }
 
 func (s *Supervisor) runDiscoveryLoop(ctx context.Context) {
@@ -356,25 +503,51 @@ func (s *Supervisor) flushFlowDelta() {
 func (s *Supervisor) Status() map[string]any {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	return s.statusLocked()
+}
 
+func (s *Supervisor) statusLocked() map[string]any {
 	walBytes, unacked, drops, _ := s.wal.Stats()
 	shed := int(s.watchdog.CurrentLevel())
 
+	agentID := ""
+	fingerprint := ""
+	var certExpiry time.Time
+	if s.id != nil {
+		agentID = s.id.AgentID
+		fingerprint = s.id.HostFingerprint
+		certExpiry = s.id.ExpiresAt
+	}
+
+	tierStr := "unknown"
+	tierNum := 0
+	if s.capability != nil {
+		tierStr = s.capability.Tier.String()
+		tierNum = int(s.capability.Tier)
+	}
+
+	var conflicts []string
+	killSwitch := false
+	if s.effective != nil {
+		conflicts = s.effective.Conflicts
+		killSwitch = s.effective.KillSwitchActive
+	}
+
 	status := map[string]any{
-		"agent_id":          s.id.AgentID,
-		"host_fingerprint":  s.id.HostFingerprint,
-		"tier":              s.capability.Tier.String(),
-		"tier_number":       int(s.capability.Tier),
-		"connected":         s.connected,
-		"last_contact":      s.lastContact,
-		"wal_bytes":         walBytes,
-		"unacked_messages":  unacked,
-		"shed_level":        shed,
-		"shed_level_name":   s.watchdog.CurrentLevel().String(),
-		"drop_counters":     drops,
-		"policy_conflicts":  s.effective.Conflicts,
-		"kill_switch":       s.effective.KillSwitchActive,
-		"certificate_expiry": s.id.ExpiresAt,
+		"agent_id":           agentID,
+		"host_fingerprint":   fingerprint,
+		"tier":               tierStr,
+		"tier_number":        tierNum,
+		"connected":          s.connected,
+		"last_contact":       s.lastContact,
+		"wal_bytes":          walBytes,
+		"unacked_messages":   unacked,
+		"shed_level":         shed,
+		"shed_level_name":    s.watchdog.CurrentLevel().String(),
+		"drop_counters":      drops,
+		"policy_conflicts":   conflicts,
+		"kill_switch":        killSwitch,
+		"certificate_expiry": certExpiry,
 	}
 
 	return status

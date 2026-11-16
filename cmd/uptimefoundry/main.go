@@ -27,7 +27,6 @@ import (
 	"github.com/onisimchukv/uptimefoundry/internal/graph/traverser"
 	"github.com/onisimchukv/uptimefoundry/internal/investigation/ai"
 	"github.com/onisimchukv/uptimefoundry/internal/investigation/correlator"
-	mcpprotocol "github.com/onisimchukv/uptimefoundry/internal/mcp/protocol"
 	mcpserver "github.com/onisimchukv/uptimefoundry/internal/mcp/server"
 	"github.com/onisimchukv/uptimefoundry/internal/rag/embeddings"
 	"github.com/onisimchukv/uptimefoundry/internal/rag/graphrag"
@@ -759,24 +758,20 @@ func main() {
 	})
 
 	// MCP Gateway Endpoints (Milestone M7)
-	mux.HandleFunc("/mcp/rpc", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
-			return
-		}
-		var rpcReq mcpprotocol.Request
-		if err := json.NewDecoder(r.Body).Decode(&rpcReq); err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(mcpprotocol.Response{
-				JSONRPC: "2.0",
-				Error:   &mcpprotocol.Error{Code: mcpprotocol.ErrCodeParse, Message: err.Error()},
-			})
-			return
-		}
-		resp := mcpServer.HandleRequest(r.Context(), rpcReq)
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(resp)
-	})
+	mux.HandleFunc("/mcp/rpc", mcpServer.HandleHTTPRPC)
+	mux.HandleFunc("/mcp/message", mcpServer.HandleHTTPRPC)
+	mux.HandleFunc("/mcp/sse", mcpServer.HandleSSE)
+
+	// Launch dedicated MCP SSE listener if configured on a separate port
+	if cfg.MCP.Server.Enabled && cfg.MCP.Server.Transports.SSE.Enabled && cfg.MCP.Server.Transports.SSE.Port > 0 {
+		sseAddr := fmt.Sprintf("127.0.0.1:%d", cfg.MCP.Server.Transports.SSE.Port)
+		go func() {
+			logger.Info("starting dedicated mcp sse server", slog.String("addr", sseAddr))
+			if err := mcpServer.RunHTTP(ctx, sseAddr); err != nil && err != http.ErrServerClosed {
+				logger.Error("mcp sse server error", slog.Any("error", err))
+			}
+		}()
+	}
 
 	server := &http.Server{
 		Addr:         cfg.Server.ListenAddress,
