@@ -101,6 +101,6 @@ jobs:
           go-version-file: go.mod
           cache: true
       - run: go build ./...
-      - uses: github/codeql-action/analyze@6bb031afdd8eb862ea3fc1848194185e076637e5  # v3.28.11
+      - uses: github/codeql-action/analyze@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea  # v4.39.4
         with:
           category: "/language:go"
