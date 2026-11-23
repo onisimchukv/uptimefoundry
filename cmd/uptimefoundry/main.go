@@ -17,6 +17,7 @@ import (
 
 	"github.com/onisimchukv/uptimefoundry/internal/adapters"
 	"github.com/onisimchukv/uptimefoundry/internal/adapters/host"
+	k8sadapter "github.com/onisimchukv/uptimefoundry/internal/adapters/kubernetes"
 	"github.com/onisimchukv/uptimefoundry/internal/agent/protocol"
 	"github.com/onisimchukv/uptimefoundry/internal/config"
 	cpagent "github.com/onisimchukv/uptimefoundry/internal/controlplane/agent"
@@ -112,6 +113,13 @@ func main() {
 			if cfg.Discovery.Adapters.Host.Enabled {
 				activeAdapters = append(activeAdapters, host.New(logger))
 				logger.Info("registered discovery adapter", slog.String("adapter", "host"))
+			}
+			if cfg.Discovery.Adapters.Kubernetes.Enabled {
+				k8sAdapter := k8sadapter.New(k8sadapter.Config{
+					InCluster: cfg.Discovery.Adapters.Kubernetes.InCluster,
+				}, logger)
+				activeAdapters = append(activeAdapters, k8sAdapter)
+				logger.Info("registered discovery adapter", slog.String("adapter", "kubernetes"))
 			}
 
 			discoveryRunner = adapters.NewRunner(activeAdapters, resourceRepo, discoveryRepo, logger)

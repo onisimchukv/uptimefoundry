@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -43,6 +44,7 @@ type Supervisor struct {
 	cfg            Config
 	id             *identity.Identity
 	localPolicy    *policy.LocalPolicy
+	remotePolicy   *policy.RemotePolicy
 	effective      *policy.EffectivePolicy
 	prober         *capability.Prober
 	capability     *capability.Report
@@ -178,6 +180,9 @@ func (s *Supervisor) Start(ctx context.Context) error {
 
 	// 9. Start WAL Egress Streaming Loop
 	go s.runEgressLoop(ctx)
+
+	// 10. Start Certificate Auto-Renewal Loop (Section 4.3)
+	go s.runCertRenewalLoop(ctx)
 
 	return nil
 }
@@ -327,6 +332,9 @@ func (s *Supervisor) drainWAL(ctx context.Context, endpoint string) {
 			var srvMsg protocol.ServerMessage
 			if err := json.NewDecoder(resp.Body).Decode(&srvMsg); err == nil {
 				s.wal.Acknowledge(srvMsg.AckClass, srvMsg.AckSequence)
+				if srvMsg.CertRenewResp != nil {
+					_ = s.applyRenewedCert(srvMsg.CertRenewResp)
+				}
 			}
 			resp.Body.Close()
 
@@ -646,5 +654,200 @@ func (s *Supervisor) startIPC() error {
 		_ = http.Serve(listener, mux)
 	}()
 
+	return nil
+}
+
+// ReloadPolicy re-reads the local ceiling policy file and recomputes the effective policy.
+func (s *Supervisor) ReloadPolicy() error {
+	newLocPol, err := policy.LoadLocalPolicy(s.cfg.LocalPolicyPath)
+	if err != nil {
+		return fmt.Errorf("reload local policy from %s: %w", s.cfg.LocalPolicyPath, err)
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	newEffective := newLocPol.Intersect(s.remotePolicy)
+	s.localPolicy = newLocPol
+	s.effective = newEffective
+
+	if s.obiWrapper != nil {
+		s.obiWrapper = obi.NewWrapper(newEffective, s.logger)
+	}
+	if s.dnsTracker != nil {
+		s.dnsTracker = flows.NewDNSTracker(newEffective.DNS.FullNames)
+	}
+
+	s.logger.Info("reloaded local policy ceiling",
+		slog.String("policy_path", s.cfg.LocalPolicyPath),
+		slog.Int("conflicts", len(newEffective.Conflicts)),
+		slog.Bool("kill_switch", newEffective.KillSwitchActive),
+	)
+
+	return nil
+}
+
+// ApplyRemotePolicy applies an updated remote policy from the control plane and intersects with local ceiling.
+func (s *Supervisor) ApplyRemotePolicy(remote *policy.RemotePolicy) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.remotePolicy = remote
+	newEffective := s.localPolicy.Intersect(remote)
+	s.effective = newEffective
+
+	if s.obiWrapper != nil {
+		s.obiWrapper = obi.NewWrapper(newEffective, s.logger)
+	}
+	if s.dnsTracker != nil {
+		s.dnsTracker = flows.NewDNSTracker(newEffective.DNS.FullNames)
+	}
+
+	s.logger.Info("applied updated remote policy",
+		slog.Int("conflicts", len(newEffective.Conflicts)),
+		slog.Bool("kill_switch", newEffective.KillSwitchActive),
+	)
+}
+
+// EffectivePolicy returns a copy of the current effective policy.
+func (s *Supervisor) EffectivePolicy() *policy.EffectivePolicy {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.effective
+}
+
+func (s *Supervisor) runCertRenewalLoop(ctx context.Context) {
+	ticker := time.NewTicker(1 * time.Hour)
+	defer ticker.Stop()
+
+	// Perform initial check on startup
+	s.checkAndRenewCertificate(ctx)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			s.checkAndRenewCertificate(ctx)
+		}
+	}
+}
+
+func (s *Supervisor) checkAndRenewCertificate(ctx context.Context) {
+	s.mu.RLock()
+	if s.id == nil || s.id.Certificate == nil {
+		s.mu.RUnlock()
+		return
+	}
+	expiresAt := s.id.ExpiresAt
+	s.mu.RUnlock()
+
+	// Renew if within 7 days of expiration (or already expired)
+	if time.Until(expiresAt) <= 7*24*time.Hour {
+		s.logger.Info("agent certificate nearing expiration; triggering auto-renewal",
+			slog.Time("expires_at", expiresAt),
+			slog.Duration("time_remaining", time.Until(expiresAt)),
+		)
+		if err := s.RenewCertificate(ctx); err != nil {
+			s.logger.Error("failed to auto-renew agent certificate", slog.Any("error", err))
+		}
+	}
+}
+
+// RenewCertificate generates a new CSR and requests a renewed certificate from the control plane.
+func (s *Supervisor) RenewCertificate(ctx context.Context) error {
+	s.mu.RLock()
+	if s.id == nil || s.id.PrivateKey == nil {
+		s.mu.RUnlock()
+		return errors.New("cannot renew certificate: agent identity key not initialized")
+	}
+	agentID := s.id.AgentID
+	privKey := s.id.PrivateKey
+	certSN := ""
+	if s.id.Certificate != nil && s.id.Certificate.SerialNumber != nil {
+		certSN = s.id.Certificate.SerialNumber.String()
+	}
+	s.mu.RUnlock()
+
+	csrPEM, err := identity.CreateCSR(privKey, agentID)
+	if err != nil {
+		return fmt.Errorf("create renewal csr: %w", err)
+	}
+
+	renewReq := &protocol.CertRenewRequest{
+		CSR:             csrPEM,
+		CurrentCertSN:   certSN,
+		HostFingerprint: s.id.HostFingerprint,
+	}
+
+	msg := &protocol.AgentMessage{
+		AgentID:   agentID,
+		Class:     protocol.ClassCertRenew,
+		CertRenew: renewReq,
+	}
+
+	endpoint := strings.TrimRight(s.cfg.ControlPlaneURL, "/") + "/api/v1/agent/message"
+	data, err := json.Marshal(msg)
+	if err != nil {
+		return fmt.Errorf("marshal cert renew message: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(data))
+	if err != nil {
+		return fmt.Errorf("create renewal request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("dispatch renewal request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("renewal rejected by control plane: status %d", resp.StatusCode)
+	}
+
+	var srvMsg protocol.ServerMessage
+	if err := json.NewDecoder(resp.Body).Decode(&srvMsg); err != nil {
+		return fmt.Errorf("decode renewal response: %w", err)
+	}
+
+	if srvMsg.CertRenewResp == nil {
+		return errors.New("control plane response missing cert_renew_resp payload")
+	}
+
+	return s.applyRenewedCert(srvMsg.CertRenewResp)
+}
+
+func (s *Supervisor) applyRenewedCert(resp *protocol.CertRenewResponse) error {
+	if resp == nil || len(resp.CertificateChain) == 0 {
+		return errors.New("empty certificate chain in renewal response")
+	}
+
+	certBytes := resp.CertificateChain[0]
+	if err := identity.SaveCertificate(s.id.CertPath, certBytes); err != nil {
+		return fmt.Errorf("save renewed certificate: %w", err)
+	}
+
+	cert, rawPEM, err := identity.LoadCertificate(s.id.CertPath)
+	if err != nil {
+		return fmt.Errorf("reload renewed certificate: %w", err)
+	}
+
+	s.mu.Lock()
+	s.id.Certificate = cert
+	s.id.RawCertPEM = rawPEM
+	if !resp.ExpiresAt.IsZero() {
+		s.id.ExpiresAt = resp.ExpiresAt
+	} else {
+		s.id.ExpiresAt = cert.NotAfter
+	}
+	s.mu.Unlock()
+
+	s.logger.Info("agent certificate renewed and reloaded successfully",
+		slog.String("cert_path", s.id.CertPath),
+		slog.Time("expires_at", s.id.ExpiresAt),
+	)
 	return nil
 }

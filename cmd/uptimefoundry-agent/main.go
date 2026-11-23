@@ -66,10 +66,20 @@ func main() {
 	}
 
 	stopChan := make(chan os.Signal, 1)
-	signal.Notify(stopChan, os.Interrupt, syscall.SIGTERM)
+	signal.Notify(stopChan, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 
-	<-stopChan
-	logger.Info("shutdown signal received; commencing agent teardown")
+	for sig := range stopChan {
+		if sig == syscall.SIGHUP {
+			logger.Info("SIGHUP received; reloading local policy ceiling")
+			if err := sup.ReloadPolicy(); err != nil {
+				logger.Error("failed to reload local policy ceiling", slog.Any("error", err))
+			}
+			continue
+		}
+
+		logger.Info("shutdown signal received; commencing agent teardown", slog.String("signal", sig.String()))
+		break
+	}
 
 	sup.Stop()
 	logger.Info("uptimefoundry-agent supervisor stopped cleanly")

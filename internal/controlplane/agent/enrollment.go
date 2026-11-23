@@ -138,8 +138,8 @@ func (ca *CA) Enroll(token, hostFingerprint string, csrPEM []byte) (string, []by
 	// 3. Register Fingerprint (Clone Detection)
 	ca.enrolled[agentIDStr] = hostFingerprint
 
-	// 4. Sign CSR
-	certPEM, expiresAt, err := ca.signCSR(csrPEM, agentIDStr, 24*time.Hour)
+	// 4. Sign CSR (90-day validity per Spec §4.3)
+	certPEM, expiresAt, err := ca.signCSR(csrPEM, agentIDStr, 90*24*time.Hour)
 	if err != nil {
 		return "", nil, time.Time{}, fmt.Errorf("sign agent csr: %w", err)
 	}
@@ -153,13 +153,15 @@ func (ca *CA) RenewCertificate(agentID, hostFingerprint string, csrPEM []byte) (
 	defer ca.mu.Unlock()
 
 	// Verify clone detection
-	if existingFP, ok := ca.enrolled[agentID]; ok {
-		if existingFP != hostFingerprint {
-			return nil, time.Time{}, fmt.Errorf("clone detected: fingerprint mismatch for agent %s", agentID)
+	if hostFingerprint != "" {
+		if existingFP, ok := ca.enrolled[agentID]; ok {
+			if existingFP != hostFingerprint {
+				return nil, time.Time{}, fmt.Errorf("clone detected: fingerprint mismatch for agent %s", agentID)
+			}
 		}
 	}
 
-	return ca.signCSR(csrPEM, agentID, 24*time.Hour)
+	return ca.signCSR(csrPEM, agentID, 90*24*time.Hour)
 }
 
 func (ca *CA) signCSR(csrPEM []byte, agentID string, validity time.Duration) ([]byte, time.Time, error) {

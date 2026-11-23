@@ -161,8 +161,9 @@ type ResyncRequest struct {
 
 // CertRenewRequest requests client certificate renewal over the live mTLS stream.
 type CertRenewRequest struct {
-	CSR            []byte `json:"csr"` // PEM-encoded Certificate Signing Request
-	CurrentCertSN  string `json:"current_cert_sn"`
+	CSR             []byte `json:"csr"` // PEM-encoded Certificate Signing Request
+	CurrentCertSN   string `json:"current_cert_sn"`
+	HostFingerprint string `json:"host_fingerprint,omitempty"`
 }
 
 // CertRenewResponse delivers the signed certificate from the control plane CA.

@@ -236,7 +236,7 @@ func (s *IngestionService) handleCertRenew(ctx context.Context, msg *protocol.Ag
 		return nil, fmt.Errorf("missing cert renew payload")
 	}
 
-	certPEM, expiresAt, err := s.ca.RenewCertificate(msg.AgentID, "", renewReq.CSR)
+	certPEM, expiresAt, err := s.ca.RenewCertificate(msg.AgentID, renewReq.HostFingerprint, renewReq.CSR)
 	if err != nil {
 		return nil, fmt.Errorf("certificate renewal failed: %w", err)
 	}
