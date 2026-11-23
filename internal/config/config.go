@@ -187,6 +187,7 @@ type AIConfig struct {
 }
 
 type SecurityConfig struct {
+	AuthToken   string                    `yaml:"auth_token"`
 	Remediation RemediationSecurityConfig `yaml:"remediation"`
 }
 
@@ -328,6 +329,11 @@ func Load(path string) (*Config, error) {
 	if value, ok := os.LookupEnv("UPTIMEFOUNDRY_LOGS_LOKI_ENDPOINT"); ok {
 		cfg.Telemetry.Logs.Loki.QueryEndpoint = value
 	}
+	if value, ok := os.LookupEnv("UPTIMEFOUNDRY_AUTH_TOKEN"); ok {
+		cfg.Security.AuthToken = value
+	}
 
 	return cfg, nil
 }
+
+

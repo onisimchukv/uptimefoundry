@@ -20,6 +20,7 @@ import (
 	"github.com/onisimchukv/uptimefoundry/internal/agent/protocol"
 	"github.com/onisimchukv/uptimefoundry/internal/config"
 	cpagent "github.com/onisimchukv/uptimefoundry/internal/controlplane/agent"
+	cphttp "github.com/onisimchukv/uptimefoundry/internal/controlplane/http"
 	"github.com/onisimchukv/uptimefoundry/internal/core/models"
 	"github.com/onisimchukv/uptimefoundry/internal/graph"
 	"github.com/onisimchukv/uptimefoundry/internal/graph/age"
@@ -234,6 +235,7 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
+	metricsCollector := cphttp.NewMetricsCollector()
 
 	// Health and Status Endpoints
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -517,6 +519,9 @@ func main() {
 			return
 		}
 
+		metricsCollector.IncrementAgentMessages()
+		metricsCollector.SetActiveAgents(len(agentIngestion.ActiveAgents()))
+
 		_ = json.NewEncoder(w).Encode(resp)
 	})
 
@@ -775,7 +780,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:         cfg.Server.ListenAddress,
-		Handler:      mux,
+		Handler:      metricsCollector.MetricsMiddleware(cphttp.AuthMiddleware(cfg.Security.AuthToken, logger, mux)),
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 30 * time.Second,
 	}

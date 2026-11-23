@@ -26,6 +26,17 @@ type Client struct {
 	closed  bool
 }
 
+// NewIOClient constructs a Client operating over arbitrary stdin and stdout streams.
+func NewIOClient(stdin io.WriteCloser, stdout io.ReadCloser) *Client {
+	c := &Client{
+		stdin:   stdin,
+		stdout:  stdout,
+		pending: make(map[uint64]chan protocol.Response),
+	}
+	go c.listenStdout()
+	return c
+}
+
 // StartSubprocess launches an external MCP server process and initializes stdio pipes.
 func StartSubprocess(ctx context.Context, command string, args []string, env map[string]string) (*Client, error) {
 	cmd := exec.CommandContext(ctx, command, args...)
@@ -49,14 +60,8 @@ func StartSubprocess(ctx context.Context, command string, args []string, env map
 		return nil, fmt.Errorf("start subprocess %q: %w", command, err)
 	}
 
-	c := &Client{
-		cmd:     cmd,
-		stdin:   stdin,
-		stdout:  stdout,
-		pending: make(map[uint64]chan protocol.Response),
-	}
-
-	go c.listenStdout()
+	c := NewIOClient(stdin, stdout)
+	c.cmd = cmd
 
 	// Perform initialize handshake
 	initParams, _ := json.Marshal(protocol.InitializeParams{
