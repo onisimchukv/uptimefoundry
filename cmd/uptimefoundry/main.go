@@ -19,6 +19,7 @@ import (
 	"github.com/onisimchukv/uptimefoundry/internal/agent/actuator"
 	"github.com/onisimchukv/uptimefoundry/internal/adapters/host"
 	k8sadapter "github.com/onisimchukv/uptimefoundry/internal/adapters/kubernetes"
+	dockeradapter "github.com/onisimchukv/uptimefoundry/internal/adapters/docker"
 	"github.com/onisimchukv/uptimefoundry/internal/agent/protocol"
 	"github.com/onisimchukv/uptimefoundry/internal/config"
 	cpagent "github.com/onisimchukv/uptimefoundry/internal/controlplane/agent"
@@ -121,6 +122,14 @@ func main() {
 				}, logger)
 				activeAdapters = append(activeAdapters, k8sAdapter)
 				logger.Info("registered discovery adapter", slog.String("adapter", "kubernetes"))
+			}
+			if cfg.Discovery.Adapters.DockerSwarm.Enabled {
+				dockerAdapter := dockeradapter.New(dockeradapter.Config{
+					Host:       cfg.Discovery.Adapters.DockerSwarm.Host,
+					APIVersion: cfg.Discovery.Adapters.DockerSwarm.APIVersion,
+				}, logger)
+				activeAdapters = append(activeAdapters, dockerAdapter)
+				logger.Info("registered discovery adapter", slog.String("adapter", "docker_swarm"))
 			}
 
 			discoveryRunner = adapters.NewRunner(activeAdapters, resourceRepo, discoveryRepo, logger)

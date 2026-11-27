@@ -64,9 +64,15 @@ type DiscoveryConfig struct {
 }
 
 type DiscoveryAdaptersConfig struct {
-	Host        AdapterSwitch `yaml:"host"`
-	Kubernetes  K8sAdapter    `yaml:"kubernetes"`
-	DockerSwarm AdapterSwitch `yaml:"docker_swarm"`
+	Host        AdapterSwitch      `yaml:"host"`
+	Kubernetes  K8sAdapter         `yaml:"kubernetes"`
+	DockerSwarm DockerSwarmAdapter `yaml:"docker_swarm"`
+}
+
+type DockerSwarmAdapter struct {
+	Enabled    bool   `yaml:"enabled"`
+	Host       string `yaml:"host"`
+	APIVersion string `yaml:"api_version"`
 }
 
 type AdapterSwitch struct {
@@ -230,7 +236,7 @@ func DefaultConfig() *Config {
 					Enabled:   true,
 					InCluster: false,
 				},
-				DockerSwarm: AdapterSwitch{Enabled: false},
+				DockerSwarm: DockerSwarmAdapter{Enabled: false, Host: "unix:///var/run/docker.sock", APIVersion: "v1.43"},
 			},
 		},
 		EBPF: EBPFConfig{
@@ -335,6 +341,11 @@ func Load(path string) (*Config, error) {
 	}
 	if value, ok := os.LookupEnv("UPTIMEFOUNDRY_REMEDIATION_SECRET_KEY"); ok {
 		cfg.Security.Remediation.SecretKey = value
+	}
+	if value, ok := os.LookupEnv("UPTIMEFOUNDRY_DOCKER_HOST"); ok {
+		cfg.Discovery.Adapters.DockerSwarm.Host = value
+	} else if value, ok := os.LookupEnv("DOCKER_HOST"); ok {
+		cfg.Discovery.Adapters.DockerSwarm.Host = value
 	}
 
 	return cfg, nil
