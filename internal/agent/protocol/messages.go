@@ -138,18 +138,26 @@ type PolicyPayload struct {
 // TaskPayload describes a signed operational task from the closed task set.
 type TaskPayload struct {
 	TaskID      string            `json:"task_id"`
-	TaskType    string            `json:"task_type"` // e.g. "collect_diagnostics", "resync_inventory", "set_probe_state", "restart_module"
-	Parameters  map[string]string `json:"parameters"`
+	TaskType    string            `json:"task_type"` // e.g. "systemd_restart", "drop_caches", "tcp_kill", "resync_inventory"
+	Target      string            `json:"target,omitempty"`
+	Parameters  map[string]string `json:"parameters,omitempty"`
+	ApprovedBy  string            `json:"approved_by,omitempty"`
+	IssuedAt    time.Time         `json:"issued_at,omitempty"`
 	ExpiresAt   time.Time         `json:"expires_at"`
+	DryRun      bool              `json:"dry_run,omitempty"`
 	Signature   string            `json:"signature"`
 }
 
 // TaskResultPayload conveys the outcome of a signed task.
 type TaskResultPayload struct {
 	TaskID       string    `json:"task_id"`
+	Success      bool      `json:"success"`
 	Status       string    `json:"status"` // "success", "failed", "rejected"
+	DryRun       bool      `json:"dry_run,omitempty"`
 	Output       string    `json:"output,omitempty"`
 	ErrorMessage string    `json:"error_message,omitempty"`
+	ExecutedAt   time.Time `json:"executed_at,omitempty"`
+	DurationMs   int64     `json:"duration_ms,omitempty"`
 	CompletedAt  time.Time `json:"completed_at"`
 }
 

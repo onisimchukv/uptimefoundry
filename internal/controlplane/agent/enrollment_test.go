@@ -3,6 +3,7 @@
 package agent
 
 import (
+	"io"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -188,5 +189,107 @@ func TestIngestionService(t *testing.T) {
 	}
 	if lastRel.Weight != 1.45 {
 		t.Fatalf("expected weight 1.45 ms, got %f", lastRel.Weight)
+	}
+}
+
+type testMockRemediationRepo struct {
+	recordedID     string
+	recordedResult map[string]any
+	recordedErr    error
+}
+
+func (m *testMockRemediationRepo) CreateProposal(ctx context.Context, rem *models.Remediation) error {
+	return nil
+}
+
+func (m *testMockRemediationRepo) GetProposalByID(ctx context.Context, id string) (*models.Remediation, error) {
+	return nil, nil
+}
+
+func (m *testMockRemediationRepo) ApproveProposal(ctx context.Context, id, approver string) error {
+	return nil
+}
+
+func (m *testMockRemediationRepo) RecordExecution(ctx context.Context, id string, result map[string]any, execErr error) error {
+	m.recordedID = id
+	m.recordedResult = result
+	m.recordedErr = execErr
+	return nil
+}
+
+func TestIngestionService_TaskDispatchAndExecution(t *testing.T) {
+	ca, _ := NewCA()
+	mockRepo := &mockResourceRepo{}
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	svc := NewIngestionService(ca, mockRepo, logger)
+	remRepo := &testMockRemediationRepo{}
+	svc.SetRemediationRepo(remRepo)
+
+	// 1. Queue a task for agent-01
+	task := &protocol.TaskPayload{
+		TaskID:     "rem-100",
+		TaskType:   "systemd_restart",
+		Target:     "nginx.service",
+		ApprovedBy: "alice",
+		Signature:  "test-sig-123",
+	}
+	target := svc.QueueTask("agent-01", task)
+	if target != "agent-01" {
+		t.Fatalf("expected target agent-01, got %s", target)
+	}
+
+	// 2. Agent sends heartbeat -> receives the queued task
+	hbMsg := &protocol.AgentMessage{
+		AgentID:   "agent-01",
+		Class:     protocol.ClassHeartbeat,
+		Sequence:  10,
+		Heartbeat: &protocol.HeartbeatPayload{HealthStatus: "healthy"},
+	}
+	resp, err := svc.HandleMessage(context.Background(), hbMsg)
+	if err != nil {
+		t.Fatalf("unexpected heartbeat error: %v", err)
+	}
+	if resp.Task == nil {
+		t.Fatal("expected pending task to be dispatched in server response")
+	}
+	if resp.Task.TaskID != "rem-100" || resp.Task.TaskType != "systemd_restart" {
+		t.Fatalf("unexpected task in response: %+v", resp.Task)
+	}
+
+	// 3. Second heartbeat -> queue is empty, no task returned
+	resp2, _ := svc.HandleMessage(context.Background(), hbMsg)
+	if resp2.Task != nil {
+		t.Fatal("expected no task in second response since task queue was drained")
+	}
+
+	// 4. Agent sends task execution result
+	taskResMsg := &protocol.AgentMessage{
+		AgentID:  "agent-01",
+		Class:    protocol.ClassTask,
+		Sequence: 11,
+		TaskResult: &protocol.TaskResultPayload{
+			TaskID:       "rem-100",
+			Success:      true,
+			Status:       "success",
+			Output:       "nginx.service successfully restarted",
+			DurationMs:   120,
+			CompletedAt:  time.Now().UTC(),
+		},
+	}
+	_, err = svc.HandleMessage(context.Background(), taskResMsg)
+	if err != nil {
+		t.Fatalf("unexpected task result error: %v", err)
+	}
+
+	// Verify remediation repo recorded the execution
+	if remRepo.recordedID != "rem-100" {
+		t.Fatalf("expected recorded task ID 'rem-100', got %q", remRepo.recordedID)
+	}
+	if remRepo.recordedResult["output"] != "nginx.service successfully restarted" {
+		t.Fatalf("expected recorded output to match, got %+v", remRepo.recordedResult)
+	}
+	if remRepo.recordedErr != nil {
+		t.Fatalf("expected nil recorded error for successful task, got %v", remRepo.recordedErr)
 	}
 }

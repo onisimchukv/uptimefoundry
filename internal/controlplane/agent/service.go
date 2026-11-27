@@ -4,6 +4,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -30,12 +31,14 @@ type ActiveAgent struct {
 
 // IngestionService coordinates agent messages, persistence, and policy distribution.
 type IngestionService struct {
-	ca           *CA
-	resourceRepo ports.ResourceRepository
-	activeAgents map[string]*ActiveAgent
-	remotePolicy *protocol.PolicyPayload
-	logger       *slog.Logger
-	mu           sync.RWMutex
+	ca              *CA
+	resourceRepo    ports.ResourceRepository
+	remediationRepo ports.RemediationRepository
+	activeAgents    map[string]*ActiveAgent
+	pendingTasks    map[string][]*protocol.TaskPayload
+	remotePolicy    *protocol.PolicyPayload
+	logger          *slog.Logger
+	mu              sync.RWMutex
 }
 
 // NewIngestionService creates a new agent ingestion coordinator.
@@ -51,6 +54,7 @@ func NewIngestionService(ca *CA, resourceRepo ports.ResourceRepository, logger *
 		ca:           ca,
 		resourceRepo: resourceRepo,
 		activeAgents: make(map[string]*ActiveAgent),
+		pendingTasks: make(map[string][]*protocol.TaskPayload),
 		remotePolicy: defaultPolicy,
 		logger:       logger,
 	}
@@ -66,6 +70,23 @@ func (s *IngestionService) HandleMessage(ctx context.Context, msg *protocol.Agen
 		AckSequence: msg.Sequence,
 		AckClass:    msg.Class,
 	}
+
+	// Attach next pending operational task for this agent if available
+	s.mu.Lock()
+	if tasks, ok := s.pendingTasks[msg.AgentID]; ok && len(tasks) > 0 {
+		resp.Task = tasks[0]
+		s.pendingTasks[msg.AgentID] = tasks[1:]
+		if len(s.pendingTasks[msg.AgentID]) == 0 {
+			delete(s.pendingTasks, msg.AgentID)
+		}
+	} else if tasks, ok := s.pendingTasks["default"]; ok && len(tasks) > 0 {
+		resp.Task = tasks[0]
+		s.pendingTasks["default"] = tasks[1:]
+		if len(s.pendingTasks["default"]) == 0 {
+			delete(s.pendingTasks, "default")
+		}
+	}
+	s.mu.Unlock()
 
 	switch msg.Class {
 	case protocol.ClassRegister:
@@ -84,8 +105,7 @@ func (s *IngestionService) HandleMessage(ctx context.Context, msg *protocol.Agen
 		return s.handleCertRenew(ctx, msg, resp)
 
 	case protocol.ClassTask:
-		// Task execution result acknowledged
-		return resp, nil
+		return s.handleTaskResult(ctx, msg, resp)
 
 	default:
 		return resp, nil
@@ -264,4 +284,92 @@ func (s *IngestionService) ActiveAgents() []*ActiveAgent {
 		list = append(list, a)
 	}
 	return list
+}
+
+// SetRemediationRepo wires the repository for tracking and updating remediation outcomes.
+func (s *IngestionService) SetRemediationRepo(repo ports.RemediationRepository) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.remediationRepo = repo
+}
+
+// QueueTask enqueues a signed operational task for delivery to the designated agent.
+// If agentID is empty or "default", it routes to the first active registered agent.
+// Returns the resolved agentID.
+func (s *IngestionService) QueueTask(agentID string, task *protocol.TaskPayload) string {
+	if task == nil {
+		return ""
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	targetID := agentID
+	if targetID == "" || targetID == "default" {
+		for id := range s.activeAgents {
+			targetID = id
+			break
+		}
+	}
+	if targetID == "" {
+		targetID = "default"
+	}
+
+	s.pendingTasks[targetID] = append(s.pendingTasks[targetID], task)
+	s.logger.Info("enqueued operational task for agent",
+		slog.String("target_agent", targetID),
+		slog.String("task_id", task.TaskID),
+		slog.String("task_type", task.TaskType),
+	)
+	return targetID
+}
+
+func (s *IngestionService) handleTaskResult(ctx context.Context, msg *protocol.AgentMessage, resp *protocol.ServerMessage) (*protocol.ServerMessage, error) {
+	taskRes := msg.TaskResult
+	if taskRes == nil {
+		return resp, nil
+	}
+
+	s.logger.Info("received task execution result from agent",
+		slog.String("agent_id", msg.AgentID),
+		slog.String("task_id", taskRes.TaskID),
+		slog.String("status", taskRes.Status),
+		slog.Bool("success", taskRes.Success),
+		slog.String("output", taskRes.Output),
+		slog.String("error", taskRes.ErrorMessage),
+	)
+
+	s.mu.RLock()
+	remRepo := s.remediationRepo
+	s.mu.RUnlock()
+
+	if remRepo != nil {
+		resData := map[string]any{
+			"agent_id":     msg.AgentID,
+			"status":       taskRes.Status,
+			"success":      taskRes.Success,
+			"dry_run":      taskRes.DryRun,
+			"output":       taskRes.Output,
+			"duration_ms":  taskRes.DurationMs,
+			"executed_at":  taskRes.ExecutedAt,
+			"completed_at": taskRes.CompletedAt,
+		}
+
+		var execErr error
+		if !taskRes.Success || taskRes.Status == "failed" || taskRes.ErrorMessage != "" {
+			if taskRes.ErrorMessage != "" {
+				execErr = errors.New(taskRes.ErrorMessage)
+			} else {
+				execErr = fmt.Errorf("task failed with status %s", taskRes.Status)
+			}
+		}
+
+		if err := remRepo.RecordExecution(ctx, taskRes.TaskID, resData, execErr); err != nil {
+			s.logger.Error("failed to record remediation execution in repository",
+				slog.String("task_id", taskRes.TaskID),
+				slog.Any("error", err),
+			)
+		}
+	}
+
+	return resp, nil
 }

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/onisimchukv/uptimefoundry/internal/adapters"
+	"github.com/onisimchukv/uptimefoundry/internal/agent/actuator"
 	"github.com/onisimchukv/uptimefoundry/internal/adapters/host"
 	k8sadapter "github.com/onisimchukv/uptimefoundry/internal/adapters/kubernetes"
 	"github.com/onisimchukv/uptimefoundry/internal/agent/protocol"
@@ -187,6 +188,7 @@ func main() {
 	if db != nil {
 		knowledgeRepo = postgres.NewKnowledgeRepo(db, logger)
 		incidentRepo = postgres.NewIncidentRepo(db, logger)
+		agentIngestion.SetRemediationRepo(incidentRepo)
 	}
 
 	// Initialize Embeddings Provider
@@ -767,7 +769,71 @@ func main() {
 			http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadRequest)
 			return
 		}
-		_ = json.NewEncoder(w).Encode(map[string]string{"status": "approved", "id": req.ID})
+
+		// Retrieve approved proposal
+		rem, err := incidentRepo.GetProposalByID(r.Context(), req.ID)
+		if err != nil {
+			logger.Error("failed to load approved remediation proposal", slog.Any("error", err))
+			_ = json.NewEncoder(w).Encode(map[string]string{"status": "approved", "id": req.ID})
+			return
+		}
+
+		// Sign task with secret key
+		signingKey := []byte(cfg.Security.Remediation.SecretKey)
+		if len(signingKey) == 0 {
+			signingKey = []byte("uptimefoundry-actuator-dev-key")
+		}
+
+		target := ""
+		if t, ok := rem.Parameters["target"].(string); ok {
+			target = t
+		}
+		agentID := ""
+		if a, ok := rem.Parameters["agent_id"].(string); ok {
+			agentID = a
+		}
+
+		params := make(map[string]string)
+		for k, v := range rem.Parameters {
+			params[k] = fmt.Sprintf("%v", v)
+		}
+
+		signedTask := actuator.SignedActionTask{
+			TaskID:     rem.ID,
+			ActionType: rem.ActionType,
+			Target:     target,
+			Parameters: params,
+			ApprovedBy: req.Approver,
+			IssuedAt:   time.Now().UTC(),
+			ExpiresAt:  time.Now().UTC().Add(10 * time.Minute),
+			DryRun:     false,
+		}
+		if dry, ok := rem.Parameters["dry_run"].(bool); ok {
+			signedTask.DryRun = dry
+		}
+		actuator.SignTaskHMAC(&signedTask, signingKey)
+
+		taskPayload := &protocol.TaskPayload{
+			TaskID:     signedTask.TaskID,
+			TaskType:   signedTask.ActionType,
+			Target:     signedTask.Target,
+			Parameters: signedTask.Parameters,
+			ApprovedBy: signedTask.ApprovedBy,
+			IssuedAt:   signedTask.IssuedAt,
+			ExpiresAt:  signedTask.ExpiresAt,
+			DryRun:     signedTask.DryRun,
+			Signature:  signedTask.Signature,
+		}
+
+		routedAgent := agentIngestion.QueueTask(agentID, taskPayload)
+
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"status":       "approved",
+			"id":           req.ID,
+			"target_agent": routedAgent,
+			"action_type":  rem.ActionType,
+			"queued":       true,
+		})
 	})
 
 	// MCP Gateway Endpoints (Milestone M7)

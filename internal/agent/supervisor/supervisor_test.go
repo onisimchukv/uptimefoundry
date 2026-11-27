@@ -3,6 +3,8 @@
 package supervisor
 
 import (
+	"github.com/onisimchukv/uptimefoundry/internal/agent/actuator"
+	"net"
 	"context"
 	"encoding/json"
 	"io"
@@ -344,5 +346,104 @@ func TestSupervisor_CertAutoRenewal(t *testing.T) {
 
 	if time.Until(newExpiry) < 20*24*time.Hour {
 		t.Errorf("expected renewed cert expiry far in future, got %v", newExpiry)
+	}
+}
+
+func TestSupervisor_TaskForwardingAndExecution(t *testing.T) {
+	tempDir := t.TempDir()
+
+	socketPath := filepath.Join(tempDir, "actuator.sock")
+	cfg := Config{
+		StateDir:           tempDir,
+		SocketPath:         filepath.Join(tempDir, "agent.sock"),
+		ActuatorSocketPath: socketPath,
+		WALMaxMB:           5,
+	}
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	sup, err := New(cfg, logger)
+	if err != nil {
+		t.Fatalf("failed to create supervisor: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if err := sup.Start(ctx); err != nil {
+		t.Fatalf("failed to start supervisor: %v", err)
+	}
+	defer sup.Stop()
+
+	testTask := &protocol.TaskPayload{
+		TaskID:     "task-test-01",
+		TaskType:   "systemd_restart",
+		Target:     "nginx.service",
+		ApprovedBy: "operator-bob",
+		IssuedAt:   time.Now().UTC(),
+		ExpiresAt:  time.Now().UTC().Add(5 * time.Minute),
+		Signature:  "mock-sig",
+	}
+
+	// 1. When actuator is unreachable, ExecuteTask returns graceful rejection
+	rejResult, err := sup.ExecuteTask(ctx, testTask)
+	if err != nil {
+		t.Fatalf("unexpected error on unreachable actuator: %v", err)
+	}
+	if rejResult == nil || rejResult.Success || rejResult.Status != "rejected" {
+		t.Fatalf("expected rejected status for unreachable actuator, got %+v", rejResult)
+	}
+
+	// 2. Set up mock actuator Unix domain socket if supported
+	listener, err := net.Listen("unix", socketPath)
+	if err == nil {
+		defer listener.Close()
+		go func() {
+			mux := http.NewServeMux()
+			mux.HandleFunc("/execute", func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				var req actuator.SignedActionTask
+				_ = json.NewDecoder(r.Body).Decode(&req)
+				_ = json.NewEncoder(w).Encode(actuator.ExecutionResult{
+					TaskID:       req.TaskID,
+					Success:      true,
+					Output:       "restarted " + req.Target,
+					ExecutedAt:   time.Now().UTC(),
+					DurationMs:   35,
+				})
+			})
+			_ = http.Serve(listener, mux)
+		}()
+
+		// Allow server to accept
+		time.Sleep(50 * time.Millisecond)
+
+		successResult, err := sup.ExecuteTask(ctx, testTask)
+		if err != nil {
+			t.Fatalf("unexpected error executing task against mock actuator: %v", err)
+		}
+		if !successResult.Success || successResult.Status != "success" {
+			t.Fatalf("expected successful task execution, got %+v", successResult)
+		}
+		if successResult.Output != "restarted nginx.service" {
+			t.Fatalf("unexpected output: %s", successResult.Output)
+		}
+	} else {
+		t.Logf("unix domain sockets not supported on this platform (%v); verified rejection path", err)
+	}
+
+	// 3. Test handleAssignedTask pushes ClassTask result to WAL
+	sup.handleAssignedTask(ctx, testTask)
+
+	unacked := sup.wal.Peek(10)
+
+	var foundTaskResult bool
+	for _, msg := range unacked {
+		if msg.Class == protocol.ClassTask && msg.TaskResult != nil && msg.TaskResult.TaskID == "task-test-01" {
+			foundTaskResult = true
+			break
+		}
+	}
+	if !foundTaskResult {
+		t.Fatal("expected task result message to be pushed into WAL")
 	}
 }

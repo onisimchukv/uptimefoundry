@@ -192,8 +192,9 @@ type SecurityConfig struct {
 }
 
 type RemediationSecurityConfig struct {
-	Enabled                  bool `yaml:"enabled"`
-	RequireTwoPersonApproval bool `yaml:"require_two_person_approval"`
+	Enabled                  bool   `yaml:"enabled"`
+	RequireTwoPersonApproval bool   `yaml:"require_two_person_approval"`
+	SecretKey                string `yaml:"secret_key"`
 }
 
 // DefaultConfig returns safe operational defaults.
@@ -331,6 +332,9 @@ func Load(path string) (*Config, error) {
 	}
 	if value, ok := os.LookupEnv("UPTIMEFOUNDRY_AUTH_TOKEN"); ok {
 		cfg.Security.AuthToken = value
+	}
+	if value, ok := os.LookupEnv("UPTIMEFOUNDRY_REMEDIATION_SECRET_KEY"); ok {
+		cfg.Security.Remediation.SecretKey = value
 	}
 
 	return cfg, nil

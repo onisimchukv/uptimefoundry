@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/onisimchukv/uptimefoundry/internal/adapters"
+	"github.com/onisimchukv/uptimefoundry/internal/agent/actuator"
 	"github.com/onisimchukv/uptimefoundry/internal/adapters/host"
 	"github.com/onisimchukv/uptimefoundry/internal/agent/capability"
 	"github.com/onisimchukv/uptimefoundry/internal/agent/flows"
@@ -30,13 +31,14 @@ import (
 
 // Config configures the supervisor daemon.
 type Config struct {
-	ControlPlaneURL string
-	LocalPolicyPath string
-	StateDir        string
-	WALMaxMB        int
-	SocketPath      string
-	BootstrapToken  string
-	EnvironmentID   string
+	ControlPlaneURL    string
+	LocalPolicyPath    string
+	StateDir           string
+	WALMaxMB           int
+	SocketPath         string
+	ActuatorSocketPath string
+	BootstrapToken     string
+	EnvironmentID      string
 }
 
 // Supervisor coordinates agent lifecycle, unprivileged discovery, WAL, and control plane streaming.
@@ -334,6 +336,9 @@ func (s *Supervisor) drainWAL(ctx context.Context, endpoint string) {
 				s.wal.Acknowledge(srvMsg.AckClass, srvMsg.AckSequence)
 				if srvMsg.CertRenewResp != nil {
 					_ = s.applyRenewedCert(srvMsg.CertRenewResp)
+				}
+				if srvMsg.Task != nil {
+					go s.handleAssignedTask(ctx, srvMsg.Task)
 				}
 			}
 			resp.Body.Close()
@@ -850,4 +855,141 @@ func (s *Supervisor) applyRenewedCert(resp *protocol.CertRenewResponse) error {
 		slog.Time("expires_at", s.id.ExpiresAt),
 	)
 	return nil
+}
+
+func (s *Supervisor) handleAssignedTask(ctx context.Context, task *protocol.TaskPayload) {
+	if task == nil {
+		return
+	}
+
+	s.logger.Info("received operational task from control plane",
+		slog.String("task_id", task.TaskID),
+		slog.String("task_type", task.TaskType),
+		slog.String("target", task.Target),
+	)
+
+	result, err := s.ExecuteTask(ctx, task)
+	if err != nil {
+		s.logger.Error("failed to execute assigned task",
+			slog.String("task_id", task.TaskID),
+			slog.Any("error", err),
+		)
+		if result == nil {
+			result = &protocol.TaskResultPayload{
+				TaskID:       task.TaskID,
+				Success:      false,
+				Status:       "failed",
+				ErrorMessage: err.Error(),
+				CompletedAt:  time.Now().UTC(),
+			}
+		}
+	}
+
+	s.mu.RLock()
+	agentID := ""
+	if s.id != nil {
+		agentID = s.id.AgentID
+	}
+	s.mu.RUnlock()
+
+	msg := &protocol.AgentMessage{
+		AgentID:    agentID,
+		Class:      protocol.ClassTask,
+		TaskResult: result,
+	}
+
+	if err := s.wal.Push(msg); err != nil {
+		s.logger.Error("failed to buffer task execution result to wal", slog.Any("error", err))
+	} else {
+		s.logger.Info("task execution result buffered to wal",
+			slog.String("task_id", task.TaskID),
+			slog.String("status", result.Status),
+			slog.Bool("success", result.Success),
+		)
+	}
+}
+
+// ExecuteTask forwards a signed task to the local actuator over the private Unix domain socket.
+func (s *Supervisor) ExecuteTask(ctx context.Context, task *protocol.TaskPayload) (*protocol.TaskResultPayload, error) {
+	if task == nil {
+		return nil, errors.New("nil task payload")
+	}
+
+	// 1. Convert to actuator.SignedActionTask
+	signedTask := actuator.SignedActionTask{
+		TaskID:     task.TaskID,
+		ActionType: task.TaskType,
+		Target:     task.Target,
+		Parameters: task.Parameters,
+		ApprovedBy: task.ApprovedBy,
+		IssuedAt:   task.IssuedAt,
+		ExpiresAt:  task.ExpiresAt,
+		DryRun:     task.DryRun,
+		Signature:  task.Signature,
+	}
+
+	taskBytes, err := json.Marshal(signedTask)
+	if err != nil {
+		return nil, fmt.Errorf("marshal task for actuator: %w", err)
+	}
+
+	// 2. Connect to local Actuator Unix Domain Socket
+	socketPath := s.cfg.ActuatorSocketPath
+	if socketPath == "" {
+		socketPath = filepath.Join(s.cfg.StateDir, "actuator.sock")
+	}
+
+	dialer := net.Dialer{Timeout: 5 * time.Second}
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+		Transport: &http.Transport{
+			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				return dialer.DialContext(ctx, "unix", socketPath)
+			},
+		},
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://actuator/execute", bytes.NewReader(taskBytes))
+	if err != nil {
+		return nil, fmt.Errorf("create actuator request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		s.logger.Warn("actuator socket unreachable; returning rejection",
+			slog.String("socket", socketPath),
+			slog.Any("error", err),
+		)
+		return &protocol.TaskResultPayload{
+			TaskID:       task.TaskID,
+			Success:      false,
+			Status:       "rejected",
+			ErrorMessage: fmt.Sprintf("actuator service unreachable at %s: %v", socketPath, err),
+			CompletedAt:  time.Now().UTC(),
+		}, nil
+	}
+	defer resp.Body.Close()
+
+	var execResult actuator.ExecutionResult
+	if err := json.NewDecoder(resp.Body).Decode(&execResult); err != nil {
+		return nil, fmt.Errorf("decode actuator execution result: %w", err)
+	}
+
+	status := "success"
+	if !execResult.Success {
+		status = "failed"
+	}
+
+	return &protocol.TaskResultPayload{
+		TaskID:       execResult.TaskID,
+		Success:      execResult.Success,
+		Status:       status,
+		DryRun:       execResult.DryRun,
+		Output:       execResult.Output,
+		ErrorMessage: execResult.ErrorMessage,
+		ExecutedAt:   execResult.ExecutedAt,
+		DurationMs:   execResult.DurationMs,
+		CompletedAt:  time.Now().UTC(),
+	}, nil
 }
