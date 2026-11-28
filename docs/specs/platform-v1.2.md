@@ -3,9 +3,9 @@
 
 This specification is retained as historical design context and is superseded by [agent-v1.3](agent-v1.3.md) for agent behavior and security boundaries. The agent-to-control-plane data path, per-process capabilities, and debugfs mount claims have been corrected from Section 17.1. Other Section 17.1 platform corrections remain open; this is not current implementation guidance.
 
-# ForgeOps — Technical Specification v1.2
+# UptimeFoundry — Technical Specification v1.2
 
-**Project:** ForgeOps  
+**Project:** UptimeFoundry  
 **Category:** Self-hosted DevOps and SRE automation platform  
 **Primary language:** Go  
 **Primary database:** PostgreSQL (with Apache AGE property graph & pgvector vector search)  
@@ -24,7 +24,7 @@ This specification is retained as historical design context and is superseded by
 
 ## 1.1 Purpose
 
-ForgeOps is a self-hosted infrastructure operations and site reliability engineering (SRE) platform designed to:
+UptimeFoundry is a self-hosted infrastructure operations and site reliability engineering (SRE) platform designed to:
 1. Discover heterogeneous infrastructure and build a continuously synchronized property graph topology.
 2. Ingest zero-touch kernel-level telemetry and correlate multi-signal operational evidence (metrics, logs, traces, network socket flows).
 3. Ground incident analysis in organizational knowledge (runbooks, historical post-mortems, GitOps configurations) using Graph-guided Retrieval-Augmented Generation (GraphRAG).
@@ -39,11 +39,11 @@ The platform targets organizations operating across:
 * Hybrid architectures bridging legacy virtualization and modern container platforms.
 * Existing monitoring stacks (VictoriaMetrics, Prometheus, Loki, OpenTelemetry Collectors).
 
-ForgeOps provides the investigative capabilities of an AI-assisted operations engineer while remaining 100% self-hosted, sovereign, and free of mandatory external SaaS dependencies.
+UptimeFoundry provides the investigative capabilities of an AI-assisted operations engineer while remaining 100% self-hosted, sovereign, and free of mandatory external SaaS dependencies.
 
 ## 1.2 Core Capabilities
 
-ForgeOps v1.2 provides:
+UptimeFoundry v1.2 provides:
 
 1. **Infrastructure Discovery and Property Graph:** Continuous discovery of hosts, containers, clusters, and networks mapped into a PostgreSQL property graph powered by **Apache AGE** (openCypher) and hierarchical path indexes.
 2. **OpenTelemetry eBPF Instrumentation (OBI):** Zero-code kernel-level auto-instrumentation for HTTP/gRPC/SQL RED metrics (Rate, Errors, Duration), user-space TLS inspection via uprobes without private keys, and deterministic socket-level network latency/topology mapping.
@@ -58,7 +58,7 @@ ForgeOps v1.2 provides:
 
 ## 1.3 Architectural Principles
 
-ForgeOps adheres strictly to the following architectural tenets:
+UptimeFoundry adheres strictly to the following architectural tenets:
 
 * **Self-hosted and Sovereign First:** Core functionality must operate without external SaaS dependencies or mandatory cloud services.
 * **Unified PostgreSQL Engine:** Store relational metadata, property graph topologies (Apache AGE), and dense vector embeddings (pgvector) in a single PostgreSQL cluster, eliminating operational fragmentation.
@@ -108,7 +108,7 @@ The platform will explicitly **not**:
 
 ## 3.1 High-Level Architecture
 
-The ForgeOps platform is designed as a **modular Go monolith** for the control plane, supplemented by a lightweight host agent (`forgeops-agent`) capable of hosting eBPF probes on target nodes.
+The UptimeFoundry platform is designed as a **modular Go monolith** for the control plane, supplemented by a lightweight host agent (`forgeops-agent`) capable of hosting eBPF probes on target nodes.
 
 ```
                              OPERATORS & AGENTS
@@ -203,7 +203,7 @@ The ForgeOps platform is designed as a **modular Go monolith** for the control p
 ## ADR-001: Go as the Primary Implementation Language
 * **Status:** Accepted
 * **Context:** The system requires high concurrency, low memory overhead, straightforward cross-compilation for RHEL/Linux, native integration with the Kubernetes API machinery, and direct interoperability with eBPF libraries (Cilium's `cilium/ebpf`).
-* **Decision:** ForgeOps control plane, agent, and CLI are built purely in Go (v1.23+).
+* **Decision:** UptimeFoundry control plane, agent, and CLI are built purely in Go (v1.23+).
 
 ## ADR-002: Modular Monolith Control Plane
 * **Status:** Accepted
@@ -248,7 +248,7 @@ The ForgeOps platform is designed as a **modular Go monolith** for the control p
 ## ADR-010: Model Context Protocol (MCP) as a First-Class Interface
 * **Status:** Accepted (Promoted from Optional in v1.1)
 * **Context:** Modern SRE workflows increasingly rely on external AI assistants (Claude Desktop, Cursor, Antigravity, autonomous agents) needing structured, authenticated access to operational state.
-* **Decision:** Embed a dual-mode MCP Gateway into ForgeOps. ForgeOps acts as an **MCP Server** (exposing tools, resources, and triage prompts over stdio and SSE) and an **MCP Client** (enriching investigations with data from GitHub, PagerDuty, and cloud providers).
+* **Decision:** Embed a dual-mode MCP Gateway into UptimeFoundry. UptimeFoundry acts as an **MCP Server** (exposing tools, resources, and triage prompts over stdio and SSE) and an **MCP Client** (enriching investigations with data from GitHub, PagerDuty, and cloud providers).
 
 ## ADR-011: Operational RAG and GraphRAG Knowledge Engine
 * **Status:** Accepted (New in v1.2)
@@ -429,12 +429,12 @@ The host adapter collects hardware, system, and kernel state without requiring r
 
 # 8. Telemetry Architecture
 
-ForgeOps supports five comprehensive collection patterns:
+UptimeFoundry supports five comprehensive collection patterns:
 
 ```
-  Pattern A: Existing Observability Stack (ForgeOps queries VM/Loki via PromQL/LogQL)
-  Pattern B: Existing OpenTelemetry Collectors (Collectors export OTLP to ForgeOps)
-  Pattern C: ForgeOps Managed Telemetry (Host Agent exports OTLP metrics to VM)
+  Pattern A: Existing Observability Stack (UptimeFoundry queries VM/Loki via PromQL/LogQL)
+  Pattern B: Existing OpenTelemetry Collectors (Collectors export OTLP to UptimeFoundry)
+  Pattern C: UptimeFoundry Managed Telemetry (Host Agent exports OTLP metrics to VM)
   Pattern D: Mixed Heterogeneous Infrastructure (K8s OTel + Bare-Metal Prometheus)
   Pattern E: Zero-Code eBPF Instrumentation (Kernel-level RED metrics and socket flows)
 ```
@@ -451,7 +451,7 @@ Ingestion pathways are decoupled from querying pathways:
 
 ## 9.1 Functional Overview
 
-The integration of OpenTelemetry eBPF Instrumentation (OBI) into the `forgeops-agent` transforms ForgeOps into a zero-touch observability platform. By executing verified eBPF bytecode in the Linux kernel, ForgeOps instruments applications without touching their source code, build chains, or deployment manifests.
+The integration of OpenTelemetry eBPF Instrumentation (OBI) into the `forgeops-agent` transforms UptimeFoundry into a zero-touch observability platform. By executing verified eBPF bytecode in the Linux kernel, UptimeFoundry instruments applications without touching their source code, build chains, or deployment manifests.
 
 ```mermaid
 sequenceDiagram
@@ -502,7 +502,7 @@ OBI provides direct kernel ground truth for network connectivity:
 * Injects dynamic `CONNECTS_TO` edges into the Apache AGE graph:
   * Measures kernel TCP round-trip time (`srtt`).
   * Counts TCP retransmissions (`retrans_out`) and socket drop events.
-  * *Operational Benefit:* If a database query spikes in latency, ForgeOps immediately determines whether the bottleneck is network packet loss, kernel socket backlog, or database query execution time.
+  * *Operational Benefit:* If a database query spikes in latency, UptimeFoundry immediately determines whether the bottleneck is network packet loss, kernel socket backlog, or database query execution time.
 
 ## 9.5 Kernel Requirements & Safety Guarantees
 
@@ -521,7 +521,7 @@ VictoriaMetrics serves as the primary time-series engine:
   ```text
   http://<victoriametrics-host>:8428/opentelemetry/v1/metrics
   ```
-* **MetricsQL Query Engine:** ForgeOps leverages VictoriaMetrics extended MetricsQL functions (such as `latency_percentile`, `rate_over_time`, `rollup_changes`) for fast incident anomaly detection.
+* **MetricsQL Query Engine:** UptimeFoundry leverages VictoriaMetrics extended MetricsQL functions (such as `latency_percentile`, `rate_over_time`, `rollup_changes`) for fast incident anomaly detection.
 * **Query Protection:** Configurable timeouts (default: 15s), maximum query range limits (default: 7 days), and maximum series caps (default: 2,000 series per query) prevent catastrophic out-of-memory errors on large clusters.
 
 ---
@@ -529,7 +529,7 @@ VictoriaMetrics serves as the primary time-series engine:
 # 11. Prometheus Integration
 
 For environments with existing Prometheus installations:
-* ForgeOps implements standard PromQL `/api/v1/query` and `/api/v1/query_range` clients.
+* UptimeFoundry implements standard PromQL `/api/v1/query` and `/api/v1/query_range` clients.
 * Seamlessly swaps between VictoriaMetrics and Prometheus via the common Go `MetricsProvider` interface without requiring code changes in the investigation engine.
 
 ---
@@ -901,7 +901,7 @@ security:
 
 ## 16.2 Model Context Protocol (MCP) Server Specification
 
-ForgeOps embeds an **MCP Server** that exposes operational state directly to AI agents via JSON-RPC over `stdio` (CLI) and `SSE` (Network).
+UptimeFoundry embeds an **MCP Server** that exposes operational state directly to AI agents via JSON-RPC over `stdio` (CLI) and `SSE` (Network).
 
 ### 1. Exposed MCP Resources
 * `forgeops://environments/{env}/topology`: Live property graph topology of an environment.
@@ -970,7 +970,7 @@ Incident detection operates deterministically before AI analysis:
 
 ## 19.1 The GraphRAG Operational Architecture
 
-Standard RAG searches for keywords or semantic similarity across an entire unstructured document database, frequently returning runbooks for the wrong service or environment. **GraphRAG** in ForgeOps solves this:
+Standard RAG searches for keywords or semantic similarity across an entire unstructured document database, frequently returning runbooks for the wrong service or environment. **GraphRAG** in UptimeFoundry solves this:
 
 ```mermaid
 flowchart LR
@@ -1005,9 +1005,9 @@ flowchart LR
 
 ---
 
-# 21. Observability of ForgeOps Itself
+# 21. Observability of UptimeFoundry Itself
 
-ForgeOps instruments itself using its own standards:
+UptimeFoundry instruments itself using its own standards:
 * **Prometheus Metrics:** Exposes internal metrics at `:8080/metrics` (Go runtime, DB pool stats, discovery durations, eBPF event rates, MCP tool latency).
 * **OpenTelemetry Self-Tracing:** Generates trace spans for discovery runs, graph queries, and RAG vector searches.
 * **Health Endpoints:** `/healthz` (liveness), `/readyz` (PostgreSQL, VictoriaMetrics, and Loki connectivity).
@@ -1075,6 +1075,7 @@ ForgeOps instruments itself using its own standards:
  │ M9: Controlled Human-in-the-Loop Remediation Engine                         │
  ├─────────────────────────────────────────────────────────────────────────────┤
  │ M10: CLI (`forgeops-cli`) & Administrative Dashboards                       │
+ │ M10b: Operator Web Console & Topology UI (NEW - Work Stream 3)              │
  ├─────────────────────────────────────────────────────────────────────────────┤
  │ M11: RPM Packaging & systemd Hardening for RHEL 8/9                         │
  ├─────────────────────────────────────────────────────────────────────────────┤

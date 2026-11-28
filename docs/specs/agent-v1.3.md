@@ -810,6 +810,10 @@ A release candidate must pass every lane on every supported platform, with the b
 
 The agent is delivered in five steps that map onto platform milestones M2 to M9. Each step must pass its gate before the next begins, and the actuator is the last step because it needs the approval and audit framework.
 
+### Work Stream 3 Integration Notes
+
+The Operator Web Console & Topology UI (Work Stream 3, M10b) depends on the completion of platform milestones M1-M7 and the agent's topology capabilities (A3). The UI will integrate with the agent's real-time data streams (WAL, heartbeat, capability reports) and provide enhanced visualization of the topology information collected by the agent. Implementation begins after M9 is complete and requires WebSocket/SSE connectivity for real-time updates.
+
 ```mermaid
 flowchart LR
     A1["<b>A1 Foundation</b><br/>Enrollment, mTLS<br/>Heartbeat, WAL<br/>Host discovery"]

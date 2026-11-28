@@ -3,9 +3,9 @@
 
 This specification is retained as historical design context. It was superseded by [platform-v1.2](platform-v1.2.md), with later agent-specific requirements in [agent-v1.3](agent-v1.3.md).
 
-# ForgeOps — Technical Specification v1.1
+# UptimeFoundry — Technical Specification v1.1
 
-**Project:** ForgeOps
+**Project:** UptimeFoundry
 **Category:** Self-hosted DevOps and SRE automation platform
 **Primary language:** Go
 **Primary database:** PostgreSQL
@@ -23,7 +23,7 @@ This specification is retained as historical design context. It was superseded b
 
 ## 1.1 Purpose
 
-ForgeOps is a self-hosted infrastructure operations and reliability platform designed to discover infrastructure, build a continuously updated resource graph, collect and correlate operational evidence, investigate incidents, and recommend remediation.
+UptimeFoundry is a self-hosted infrastructure operations and reliability platform designed to discover infrastructure, build a continuously updated resource graph, collect and correlate operational evidence, investigate incidents, and recommend remediation.
 
 The platform targets organizations operating heterogeneous infrastructure across:
 
@@ -36,13 +36,13 @@ The platform targets organizations operating heterogeneous infrastructure across
 * Hybrid and distributed environments.
 * Existing monitoring and observability systems.
 
-ForgeOps should provide capabilities comparable in concept to an AI-assisted DevOps operations agent while remaining deployable in environments where external SaaS dependencies are undesirable or prohibited.
+UptimeFoundry should provide capabilities comparable in concept to an AI-assisted DevOps operations agent while remaining deployable in environments where external SaaS dependencies are undesirable or prohibited.
 
 The initial implementation prioritizes reliable discovery and evidence-backed investigation over autonomous infrastructure modification.
 
 ## 1.2 Core capabilities
 
-ForgeOps will provide:
+UptimeFoundry will provide:
 
 1. Infrastructure discovery and inventory.
 2. Kubernetes and Docker Swarm discovery.
@@ -62,13 +62,13 @@ ForgeOps will provide:
 
 ## 1.3 Architectural principles
 
-ForgeOps must follow these principles:
+UptimeFoundry must follow these principles:
 
 * **Self-hosted first:** Core functionality must not require a public SaaS control plane.
 * **Read-only first:** Discovery and investigation must not modify target infrastructure.
 * **Provider-neutral:** Integrations must not require a particular observability or AI vendor.
 * **Evidence-backed:** Findings must be traceable to actual observations, queries, events, or logs.
-* **Incremental deployment:** Operators must be able to adopt ForgeOps without replacing their existing monitoring stack.
+* **Incremental deployment:** Operators must be able to adopt UptimeFoundry without replacing their existing monitoring stack.
 * **Least privilege:** Each integration must receive only the permissions it requires.
 * **Explicit remediation:** Changes to production infrastructure require separate authorization.
 * **Operational resilience:** Temporary failures in an integration must not bring down the control plane.
@@ -90,7 +90,7 @@ The initial release will support:
 | Kubernetes              | Clusters, nodes, namespaces, workloads, pods, services, events and resource relationships |
 | Docker Swarm            | Managers, workers, services, tasks, networks and volumes where accessible                 |
 | Standalone Docker       | Containers, images, networks, volumes and container state                                 |
-| PostgreSQL              | ForgeOps metadata and application state                                                   |
+| PostgreSQL              | UptimeFoundry metadata and application state                                                   |
 | OpenTelemetry           | Integration with existing Collectors and supported OTLP endpoints                         |
 | VictoriaMetrics         | Metrics queries, backend health and supported ingestion integrations                      |
 | Prometheus              | Prometheus-compatible querying and optional scrape integration                            |
@@ -114,7 +114,7 @@ The first release will not attempt to:
 * Automatically install telemetry agents on every discovered host.
 * Automatically remediate production incidents.
 * Require an external AI provider.
-* Require Kubernetes to deploy ForgeOps.
+* Require Kubernetes to deploy UptimeFoundry.
 * Require a message broker or distributed workflow engine.
 * Require an embedded model server.
 
@@ -126,7 +126,7 @@ These capabilities may be introduced later when supported by concrete requiremen
 
 ## 3.1 High-level architecture
 
-ForgeOps will initially use a modular-monolith architecture for its control plane, with a separate lightweight agent available where remote or host-local access is necessary.
+UptimeFoundry will initially use a modular-monolith architecture for its control plane, with a separate lightweight agent available where remote or host-local access is necessary.
 
 The control plane should be independently deployable on a RHEL-compatible server or as a containerized application.
 
@@ -222,7 +222,7 @@ The host agent must not automatically gain unrestricted root access.
 
 ### Infrastructure adapters
 
-Adapters translate infrastructure-specific APIs and command results into ForgeOps resource models.
+Adapters translate infrastructure-specific APIs and command results into UptimeFoundry resource models.
 
 Initial adapters:
 
@@ -323,7 +323,7 @@ High-volume metrics and logs must remain in their designated telemetry backends 
 
 OpenTelemetry is the preferred vendor-neutral instrumentation and telemetry integration standard.
 
-ForgeOps will support:
+UptimeFoundry will support:
 
 * Integration with existing OpenTelemetry Collectors.
 * OTLP-compatible ingestion and export where required.
@@ -331,7 +331,7 @@ ForgeOps will support:
 * Telemetry correlation with discovered infrastructure.
 * Optional Collector deployment and configuration workflows.
 
-ForgeOps must not require every infrastructure component or application to use OpenTelemetry.
+UptimeFoundry must not require every infrastructure component or application to use OpenTelemetry.
 
 Existing Prometheus exporters and other supported telemetry sources remain valid.
 
@@ -339,7 +339,7 @@ Existing Prometheus exporters and other supported telemetry sources remain valid
 
 VictoriaMetrics is a first-class metrics integration and the preferred metrics backend for a new self-hosted deployment.
 
-ForgeOps must support:
+UptimeFoundry must support:
 
 * VictoriaMetrics single-node installations.
 * VictoriaMetrics cluster installations.
@@ -526,7 +526,7 @@ type Resource struct {
 
 The actual implementation should use typed identifiers and timestamps where appropriate.
 
-`ExternalID` identifies the resource in its originating system. `ID` is the stable ForgeOps identifier.
+`ExternalID` identifies the resource in its originating system. `ID` is the stable UptimeFoundry identifier.
 
 Resource IDs must be generated deterministically where reliable identity information is available. Resources without sufficient identity information must not be merged solely because their names match.
 
@@ -656,7 +656,7 @@ Initial host discovery must retrieve, where permissions allow:
 
 Discovery mechanisms may include:
 
-* A lightweight ForgeOps agent.
+* A lightweight UptimeFoundry agent.
 * A supported remote execution mechanism.
 * Existing infrastructure APIs.
 * Existing telemetry endpoints.
@@ -724,7 +724,7 @@ Initial scheduling can be implemented using database-backed jobs.
 
 ## 8.1 Objectives
 
-ForgeOps telemetry integration must provide a consistent way to collect or query operational evidence without forcing operators to replace their current monitoring infrastructure.
+UptimeFoundry telemetry integration must provide a consistent way to collect or query operational evidence without forcing operators to replace their current monitoring infrastructure.
 
 The telemetry subsystem must support:
 
@@ -737,7 +737,7 @@ The telemetry subsystem must support:
 * Historical queries.
 * Correlation with discovered topology.
 
-ForgeOps should distinguish **telemetry ingestion** from **telemetry querying**.
+UptimeFoundry should distinguish **telemetry ingestion** from **telemetry querying**.
 
 Ingestion sends or receives telemetry data. Querying retrieves existing data from a backend. These capabilities may be implemented by different providers.
 
@@ -747,7 +747,7 @@ The platform must support four operational patterns.
 
 ### Pattern A: Existing observability stack
 
-ForgeOps queries existing metrics and log backends.
+UptimeFoundry queries existing metrics and log backends.
 
 It does not install duplicate agents or change existing collection settings.
 
@@ -755,13 +755,13 @@ This should be the preferred initial integration mode.
 
 ### Pattern B: Existing OpenTelemetry Collectors
 
-ForgeOps integrates with an existing Collector deployment and uses configured OTLP endpoints or backend integrations.
+UptimeFoundry integrates with an existing Collector deployment and uses configured OTLP endpoints or backend integrations.
 
 Collector administration is optional.
 
-### Pattern C: ForgeOps-managed telemetry collection
+### Pattern C: UptimeFoundry-managed telemetry collection
 
-In a later milestone, ForgeOps may help operators deploy and configure OpenTelemetry Collectors or `vmagent`.
+In a later milestone, UptimeFoundry may help operators deploy and configure OpenTelemetry Collectors or `vmagent`.
 
 Configuration changes must require explicit authorization, validation, and audit logging.
 
@@ -785,7 +785,7 @@ The platform must support this without requiring one uniform collection strategy
 
 ## 9.1 Functional requirements
 
-ForgeOps must provide an OpenTelemetry integration module.
+UptimeFoundry must provide an OpenTelemetry integration module.
 
 The integration must support:
 
@@ -805,7 +805,7 @@ Support for each signal must be explicit. Configuring an OTLP endpoint does not 
 
 ## 9.2 Collector deployment patterns
 
-ForgeOps must accommodate three Collector deployment models.
+UptimeFoundry must accommodate three Collector deployment models.
 
 ### Host-based Collector
 
@@ -832,7 +832,7 @@ The gateway may be used alongside a DaemonSet, but both must not be deployed aut
 
 ## 9.3 Existing Collector mode
 
-The initial implementation must support an existing Collector without requiring ForgeOps to manage its lifecycle.
+The initial implementation must support an existing Collector without requiring UptimeFoundry to manage its lifecycle.
 
 Configuration should distinguish:
 
@@ -844,11 +844,11 @@ Configuration should distinguish:
 * Health-check endpoint, if available.
 * Timeout settings.
 
-ForgeOps must not assume that every Collector endpoint exposes an administrative API.
+UptimeFoundry must not assume that every Collector endpoint exposes an administrative API.
 
 ## 9.4 Resource identity and attributes
 
-ForgeOps should establish a stable mapping between discovered resources and telemetry resource attributes.
+UptimeFoundry should establish a stable mapping between discovered resources and telemetry resource attributes.
 
 Relevant attributes may include:
 
@@ -866,7 +866,7 @@ Relevant attributes may include:
 
 Attribute availability depends on the instrumentation and Collector configuration.
 
-ForgeOps must not assume that every telemetry source supplies every attribute.
+UptimeFoundry must not assume that every telemetry source supplies every attribute.
 
 When identity is ambiguous, the correlation engine must preserve uncertainty rather than merging unrelated resources.
 
@@ -898,7 +898,7 @@ Collector installation, upgrades, pipeline changes, and remote configuration man
 
 VictoriaMetrics will be a first-class metrics backend.
 
-ForgeOps must support querying existing VictoriaMetrics deployments and must not require VictoriaMetrics to be installed locally.
+UptimeFoundry must support querying existing VictoriaMetrics deployments and must not require VictoriaMetrics to be installed locally.
 
 The preferred self-hosted deployment may use VictoriaMetrics single-node for simpler environments.
 
@@ -908,7 +908,7 @@ VictoriaMetrics cluster should be supported when deployment scale or availabilit
 
 ### Mode A: Query an existing installation
 
-ForgeOps retrieves historical and current metrics using the supported VictoriaMetrics query APIs.
+UptimeFoundry retrieves historical and current metrics using the supported VictoriaMetrics query APIs.
 
 This is the initial priority.
 
@@ -928,9 +928,9 @@ For a cluster deployment, the endpoint and tenant configuration must match the d
 
 Where appropriate, `vmagent` may scrape Prometheus-compatible targets and forward metrics to VictoriaMetrics.
 
-ForgeOps may integrate with an existing `vmagent` deployment or support controlled deployment in a later release.
+UptimeFoundry may integrate with an existing `vmagent` deployment or support controlled deployment in a later release.
 
-ForgeOps must not automatically create a second scraping pipeline if the required targets are already being scraped.
+UptimeFoundry must not automatically create a second scraping pipeline if the required targets are already being scraped.
 
 ## 10.3 Query capabilities
 
@@ -947,7 +947,7 @@ The provider must implement:
 
 The query layer should use Prometheus-compatible query semantics where supported.
 
-ForgeOps must not assume every PromQL function, extension, or backend-specific feature behaves identically across all compatible systems.
+UptimeFoundry must not assume every PromQL function, extension, or backend-specific feature behaves identically across all compatible systems.
 
 ## 10.4 Single-node and cluster support
 
@@ -961,11 +961,11 @@ The configuration must distinguish:
 * Authentication and TLS.
 * Query timeout and result limits.
 
-Cluster deployments commonly separate query, ingestion, and storage responsibilities. ForgeOps must use the appropriate endpoints rather than assume a single URL serves every purpose.
+Cluster deployments commonly separate query, ingestion, and storage responsibilities. UptimeFoundry must use the appropriate endpoints rather than assume a single URL serves every purpose.
 
 ## 10.5 Metric cardinality and query protection
 
-ForgeOps must avoid expensive or unbounded queries.
+UptimeFoundry must avoid expensive or unbounded queries.
 
 Requirements:
 
@@ -986,7 +986,7 @@ The metrics provider should expose available backend capabilities and, where rel
 
 Investigations must account for missing historical data.
 
-If an incident occurred outside the available retention period, ForgeOps should report that evidence is unavailable rather than conclude that no anomaly occurred.
+If an incident occurred outside the available retention period, UptimeFoundry should report that evidence is unavailable rather than conclude that no anomaly occurred.
 
 ---
 
@@ -1003,7 +1003,7 @@ The initial adapter should support:
 * Error normalization.
 * Basic capability detection.
 
-ForgeOps may optionally integrate with Prometheus discovery and scrape configuration workflows in a later milestone.
+UptimeFoundry may optionally integrate with Prometheus discovery and scrape configuration workflows in a later milestone.
 
 Prometheus and VictoriaMetrics must implement the same internal metrics-provider contract where their capabilities overlap.
 
@@ -1029,7 +1029,7 @@ Required capabilities:
 
 OpenTelemetry log support should be implemented through the telemetry integration layer when a compatible ingestion or storage path is configured.
 
-ForgeOps must not require Loki when another supported log backend is available.
+UptimeFoundry must not require Loki when another supported log backend is available.
 
 ## 12.2 Traces
 
@@ -1048,7 +1048,7 @@ Required capabilities include:
 * Correlate spans with infrastructure resources.
 * Preserve sampling and completeness limitations.
 
-ForgeOps must not claim a complete request path when trace sampling or missing instrumentation makes the evidence incomplete.
+UptimeFoundry must not claim a complete request path when trace sampling or missing instrumentation makes the evidence incomplete.
 
 ---
 
@@ -1123,7 +1123,7 @@ It must not implement metrics storage itself.
 
 ## 13.5 Provider registry
 
-ForgeOps should resolve configured providers through a registry.
+UptimeFoundry should resolve configured providers through a registry.
 
 Example configuration:
 
@@ -1517,7 +1517,7 @@ Remediation endpoints must remain disabled until the required authorization, app
 
 ## 17.1 Objective
 
-The principal differentiator of ForgeOps should be its ability to connect infrastructure state with operational telemetry.
+The principal differentiator of UptimeFoundry should be its ability to connect infrastructure state with operational telemetry.
 
 The platform should answer questions such as:
 
@@ -1551,7 +1551,7 @@ The investigation engine should follow this sequence:
 
 **Scenario:** An application experiences increased request latency.
 
-ForgeOps may discover:
+UptimeFoundry may discover:
 
 * Request latency increased.
 * Error rates increased.
@@ -1579,7 +1579,7 @@ Node-level resource contention may be contributing to application latency.
 * Examine pod placement.
 * Check recent deployments and configuration changes.
 
-ForgeOps must not state that node contention is the confirmed root cause unless the evidence supports that conclusion.
+UptimeFoundry must not state that node contention is the confirmed root cause unless the evidence supports that conclusion.
 
 ## 17.4 Evidence model
 
@@ -1745,7 +1745,7 @@ Permissions should distinguish:
 
 Credentials must be supplied through secret references or an approved secret store.
 
-ForgeOps should be compatible with a self-hosted secret-management system.
+UptimeFoundry should be compatible with a self-hosted secret-management system.
 
 The implementation must not:
 
@@ -1768,7 +1768,7 @@ The platform must support:
 * Rate limiting.
 * Protection against server-side request forgery.
 
-Integration endpoints must be validated to prevent an untrusted configuration from turning ForgeOps into a network access proxy.
+Integration endpoints must be validated to prevent an untrusted configuration from turning UptimeFoundry into a network access proxy.
 
 ## 20.5 Auditability
 
@@ -1788,9 +1788,9 @@ Audit data must be protected against unauthorized modification.
 
 ---
 
-# 21. Observability of ForgeOps Itself
+# 21. Observability of UptimeFoundry Itself
 
-ForgeOps must be observable without depending exclusively on the observability infrastructure it manages.
+UptimeFoundry must be observable without depending exclusively on the observability infrastructure it manages.
 
 ## 21.1 Application logs
 
@@ -1833,11 +1833,11 @@ Avoid labels containing arbitrary resource names, raw query text, user identifie
 
 The application should use OpenTelemetry-compatible instrumentation for its own metrics and traces.
 
-Where enabled, ForgeOps may export its own telemetry to an existing Collector.
+Where enabled, UptimeFoundry may export its own telemetry to an existing Collector.
 
 The control plane must continue operating if telemetry export fails.
 
-Self-observability must not create a circular operational dependency in which ForgeOps cannot start or investigate incidents because its own metrics backend is unavailable.
+Self-observability must not create a circular operational dependency in which UptimeFoundry cannot start or investigate incidents because its own metrics backend is unavailable.
 
 ## 21.4 Health endpoints
 
@@ -1915,9 +1915,9 @@ The containerized control plane must not require privileged mode by default.
 
 ## 22.4 Kubernetes deployment
 
-A Kubernetes deployment package may be provided for organizations that want to run ForgeOps inside Kubernetes.
+A Kubernetes deployment package may be provided for organizations that want to run UptimeFoundry inside Kubernetes.
 
-However, Kubernetes must not be required to install or operate ForgeOps.
+However, Kubernetes must not be required to install or operate UptimeFoundry.
 
 ---
 
@@ -2058,7 +2058,7 @@ The end-to-end test environment should include:
 * Loki or a suitable test log backend.
 * A deterministic incident scenario.
 
-Tests must verify that ForgeOps can discover resources, retrieve telemetry, correlate evidence, and generate a structured investigation.
+Tests must verify that UptimeFoundry can discover resources, retrieve telemetry, correlate evidence, and generate a structured investigation.
 
 ## 24.5 Security tests
 
@@ -2107,7 +2107,7 @@ Deliverables:
 * Basic authentication.
 * systemd development deployment.
 
-**Exit criteria:** ForgeOps starts reliably and passes initial unit and integration tests.
+**Exit criteria:** UptimeFoundry starts reliably and passes initial unit and integration tests.
 
 ## M2 — Resource inventory and host discovery
 
@@ -2161,7 +2161,7 @@ Deliverables:
 * Prometheus provider.
 * Provider health reporting.
 
-**Exit criteria:** ForgeOps can retrieve bounded historical metrics from supported metrics backends.
+**Exit criteria:** UptimeFoundry can retrieve bounded historical metrics from supported metrics backends.
 
 ## M6 — OpenTelemetry integration
 
@@ -2175,7 +2175,7 @@ Deliverables:
 * Export and connectivity failure reporting.
 * Deployment examples.
 
-**Exit criteria:** ForgeOps can integrate with an existing Collector and use the configured telemetry path without requiring it to manage Collector lifecycle.
+**Exit criteria:** UptimeFoundry can integrate with an existing Collector and use the configured telemetry path without requiring it to manage Collector lifecycle.
 
 ## M7 — Logs and traces
 
@@ -2313,7 +2313,7 @@ AI-assisted investigation and controlled remediation may be delivered in later r
 
 # 28. Final Architectural Decisions
 
-The following decisions define the initial ForgeOps implementation.
+The following decisions define the initial UptimeFoundry implementation.
 
 1. **Language:** Go.
 2. **Architecture:** Modular-monolith control plane with optional host agent.
@@ -2354,4 +2354,4 @@ Once this is reliable, add VictoriaMetrics querying and OpenTelemetry integratio
 
 This order establishes the resource identity and data model that telemetry correlation will depend on later. It also avoids prematurely building AI workflows on top of an unproven discovery layer.
 
-**The architectural objective is to make ForgeOps an evidence-driven operations platform, not simply an AI wrapper around infrastructure APIs or a replacement for existing monitoring software.**
+**The architectural objective is to make UptimeFoundry an evidence-driven operations platform, not simply an AI wrapper around infrastructure APIs or a replacement for existing monitoring software.**
